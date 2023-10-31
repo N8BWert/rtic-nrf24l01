@@ -11,3 +11,9 @@ embedded-hal = "0.2.7"
 [dependencies.rtic-monotonics]
 version = "1.0.0"
 features = ["cortex-m-systick"]
+optional = true
+
+[features]
+default = ["blocking"]
+blocking = []
+async = ["dep:rtic-monotonics"]

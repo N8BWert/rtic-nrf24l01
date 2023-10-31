@@ -240,8 +240,28 @@ impl<'a> RegisterValue for Configuration<'a> {
     }
 }
 
+impl<'a> RegisterMask for Configuration<'a> {
+    fn register_mask(&self, address: u8) -> u8 {
+        match address {
+            0x00 => 0b1000_0011,
+            0x01 | 0x02 | 0x1C => 0b1100_0000,
+            0x03 => 0b1111_1100,
+            0x04 => 0b0000_0000,
+            0x05 => 0b1000_0000,
+            0x06 => 0b0101_0001,
+            0x1D => 0b1111_1000,
+            _ => 0b1111_1111,
+        }
+    }
+}
+
 /// Trait for all configurations to get their corresponding register value
 pub trait RegisterValue {
     // Converts the configuration to its corresponding register value
     fn register_value(&self, address: u8) -> u8;
+}
+
+/// Mask the configuration writable parts of the configuration u8
+pub trait RegisterMask {
+    fn register_mask(&self, address: u8) -> u8;
 }

@@ -31,6 +31,7 @@
 /// -----------------------------------------------------
 /// CE High -> CSN Low      | -----        | 4us
 /// -----------------------------------------------------
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum State {
     // Registers are maintained, but the module cannot do anything until
     // turned on
