@@ -519,7 +519,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     CSN: OutputPin<Error = GPIOE>,
     CE: OutputPin<Error = GPIOE>,
     SPI: Transfer<u8, Error = SPIE> + Write<u8, Error = SPIE> {
-    pub async fn new(csn: Option<CSN>, ce: CE, spi: SPI, config: Configuration) -> Result<Self, Error<GPIOE, SPIE>> {
+    pub async fn new(csn: Option<CSN>, ce: CE, config: Configuration<'a>, spi: &mut SPI) -> Result<Self, Error<GPIOE, SPIE>> {
         // Wait for power on reset
         Systick::delay(100u32.millis()).await;
 
