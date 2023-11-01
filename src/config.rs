@@ -22,6 +22,7 @@ pub mod power_amplifier;
 use power_amplifier::PowerAmplifier;
 
 /// The configuration of the NRF24L01 Module
+#[derive(Debug, Clone, Copy)]
 pub struct Configuration<'a> {
     // The width of tx/rx addresses
     pub address_width: AddressWidth,
@@ -91,10 +92,12 @@ impl<'a> Configuration<'a> {
             if config.auto_acknowledge {
                 auto_ack = true;
             }
+        } else {
+            return Err(ConfigurationError::MissingFirstPipeConfig);
         }
 
         if let Some(config) = pipe_configs[1] {
-            if config.address.len() != address_width.as_u8() as usize {
+            if config.address.len() != 1 {
                 return Err(ConfigurationError::InvalidAddressLength);
             }
 
@@ -108,7 +111,7 @@ impl<'a> Configuration<'a> {
         }
 
         if let Some(config) = pipe_configs[2] {
-            if config.address.len() != address_width.as_u8() as usize {
+            if config.address.len() != 1 {
                 return Err(ConfigurationError::InvalidAddressLength);
             }
 
@@ -122,7 +125,7 @@ impl<'a> Configuration<'a> {
         }
 
         if let Some(config) = pipe_configs[3] {
-            if config.address.len() != address_width.as_u8() as usize {
+            if config.address.len() != 1 {
                 return Err(ConfigurationError::InvalidAddressLength);
             }
 
@@ -136,7 +139,7 @@ impl<'a> Configuration<'a> {
         }
 
         if let Some(config) = pipe_configs[4] {
-            if config.address.len() != address_width.as_u8() as usize {
+            if config.address.len() != 1 {
                 return Err(ConfigurationError::InvalidAddressLength);
             }
 
@@ -150,7 +153,7 @@ impl<'a> Configuration<'a> {
         }
 
         if let Some(config) = pipe_configs[5] {
-            if config.address.len() != address_width.as_u8() as usize {
+            if config.address.len() != 1 {
                 return Err(ConfigurationError::InvalidAddressLength);
             }
 

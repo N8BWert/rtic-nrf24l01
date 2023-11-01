@@ -14,4 +14,8 @@ pub enum ConfigurationError {
     InvalidTransmitCount,
     // The tx address is not the correct length
     InvalidTxAddressLength,
+    // The Receive addresses do not all have the same first x digits
+    InvalidRxAddresses,
+    // The first pipe config is missing,
+    MissingFirstPipeConfig,
 }

@@ -5,6 +5,8 @@
 
 #![no_std]
 
+#![feature(impl_trait_projections)]
+
 use core::marker::PhantomData;
 
 use config::RegisterValue;
@@ -20,13 +22,13 @@ pub mod state;
 use state::State;
 
 pub mod config;
-use config::{Configuration, data_rate::DataRate, RegisterMask};
+use config::{Configuration, RegisterMask};
 
 pub mod error;
 use error::Error;
 
 pub mod register;
-use register::{StatusRegister, ContainsStatus, ConfigRegister};
+use register::{StatusRegister, ContainsStatus, ConfigRegister, FifoStatusRegister};
 
 #[cfg(feature = "async")]
 use rtic_monotonics::systick::*;
@@ -34,6 +36,7 @@ use rtic_monotonics::systick::*;
 use rtic_monotonics::systick::ExtU32;
 
 const MAX_FIFO_SIZE: usize = 32 * 3;
+const MAX_PAYLOAD_SIZE: usize = 32;
 
 /// NRF24L01 Driver Implementation with Blocking Delay
 #[cfg(feature = "blocking")]
@@ -121,7 +124,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             // 1 Byte Registers
             0x00..=0x09 | 0x11..=0x17 | 0x1C..=0x1D => {
                 if data.len() != 1 {
-                    return Err(Error::InvalidBufferSize);
+                    return Err(Error::InvalidRegisterBufferSize(register));
                 }
 
                 let mut status = [Command::WriteRegister(register).opcode(), data[0]];
@@ -132,7 +135,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             // Address Registers (5 Byte Maximum)
             0x0A..=0x10 => {
                 if data.len() != self.configuration.address_width.as_u8() as usize {
-                    return Err(Error::InvalidBufferSize);
+                    return Err(Error::InvalidAddressBufferSize);
                 }
 
                 let mut status = [0u8; 5];
@@ -335,7 +338,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
         }
     }
 
-    fn to_state(&mut self, state: State, spi: &mut SPI, delay: &mut DELAY) -> Result<(), Error<GPIOE, SPIE>> {
+    pub fn to_state(&mut self, state: State, spi: &mut SPI, delay: &mut DELAY) -> Result<(), Error<GPIOE, SPIE>> {
         if state == self.state {
             return Ok(());
         }
@@ -549,7 +552,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     pub fn read_register(&mut self, register: u8, buffer: &mut [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         match register {
             // 1 Byte Registers
-            0x00..=0x09 | 0x11..=0x17 | 0x1C..=0x1D => {
+            0x00..=0x09 | 0x0B..=0x0F | 0x11..=0x17 | 0x1C..=0x1D => {
                 if buffer.len() != 1 {
                     return Err(Error::InvalidBufferSize);
                 }
@@ -561,7 +564,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
                 Ok(status[0])
             },
             // Address Registers (5 Byte Maximum)
-            0x0A..=0x10 => {
+            0x0A | 0x10 => {
                 if buffer.len() != 5 {
                     return Err(Error::InvalidBufferSize);
                 }
@@ -580,9 +583,9 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     pub fn write_register(&mut self, register: u8, data: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         match register {
             // 1 Byte Registers
-            0x00..=0x09 | 0x11..=0x17 | 0x1C..=0x1D => {
+            0x00..=0x09 | 0x0B..=0x0F | 0x1C..=0x1D => {
                 if data.len() != 1 {
-                    return Err(Error::InvalidBufferSize);
+                    return Err(Error::InvalidRegisterBufferSize(register));
                 }
 
                 let mut status = [Command::WriteRegister(register).opcode(), data[0]];
@@ -591,14 +594,14 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
                 Ok(status[0])
             },
             // Address Registers (5 Byte Maximum)
-            0x0A..=0x10 => {
+            0x0A | 0x10 => {
                 if data.len() != self.configuration.address_width.as_u8() as usize {
-                    return Err(Error::InvalidBufferSize);
+                    return Err(Error::InvalidAddressBufferSize);
                 }
 
-                let mut status = [0u8; 5];
+                let mut status = [0u8; 6];
                 status[0] = Command::WriteRegister(register).opcode();
-                status[1..].copy_from_slice(data);
+                status[1..1+data.len()].copy_from_slice(data);
                 self.safe_transfer_spi(spi, &mut status)?;
 
                 Ok(status[0])
@@ -607,117 +610,175 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
     }
 
-    pub async fn read_payload(&mut self, buffer: &mut [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    /// Read a piece of data from the Rx FIFO of max length 32 returning (data.len(), rx_pipe)
+    pub async fn read_data(&mut self, data_buffer: &mut [u8], spi: &mut SPI) -> Result<(u8, u8), Error<GPIOE, SPIE>> {
+        // Convert to Rx State
         if self.state != State::Rx {
             self.to_state(State::Rx, spi).await?;
         }
 
-        if buffer.len() > MAX_FIFO_SIZE {
+        // Make sure the data_buffer is not too large
+        if data_buffer.len() != 32 {
             return Err(Error::InvalidBufferSize);
         }
 
-        let mut buffer_idx = 0;
-        let mut iteration = 0;
-        let mut status = 0u8;
-        while buffer.len() - buffer_idx > 0 {
-            if iteration == 3 {
-                break;
-            }
+        // Read the incoming data pipe number
+        let status = self.read_status(spi)?;
+        let pipe_num = status & 0b0000_1110;
 
-            let payload_length = self.read_payload_length(spi)?;
-            if buffer_idx + payload_length as usize > buffer.len() {
-                return Err(Error::InvalidBufferSize);
-            }
-            
-            let mut status_buffer = [0u8; 33];
-            status_buffer[0] = Command::ReadRxPayload.opcode();
+        // Read the incoming data length
+        let data_length = self.read_payload_length(spi)?;
 
-            self.safe_transfer_spi(spi, &mut status_buffer)?;
+        // Read the rx data
+        let mut rx_buffer = [0u8; 33];
+        rx_buffer[0] = Command::ReadRxPayload.opcode();
+        self.safe_transfer_spi(spi, &mut rx_buffer)?;
 
-            buffer[buffer_idx..].clone_from_slice(&status_buffer[1..=(1+payload_length as usize)]);
+        // Transfer the data into the buffer
+        data_buffer[..].copy_from_slice(&rx_buffer[1..]);
 
-            buffer_idx += payload_length as usize;
-            iteration += 1;
-            status = status_buffer[0];
-        }
-
-        Ok(status)
+        Ok((data_length, pipe_num))
     }
 
-    pub async fn write_payload(&mut self, payload: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    /// Read data from the device from a given pipe until that pipe is no longer the next incoming data.
+    pub async fn read_from_pipe(&mut self, pipe: u8, buffer: &mut [u8], spi: &mut SPI) -> Result<usize, Error<GPIOE, SPIE>> {
+        // Convert to Rx State
+        if self.state != State::Rx {
+            self.to_state(State::Rx, spi).await?;
+        }
+
+        // Keep track of where in the buffer we're writing to
+        let mut buffer_idx = 0usize;
+
+        let status = self.read_status(spi)?;
+        let mut pipe_num = status & 0b0000_1110;
+        while pipe_num == pipe {
+            // Read the incoming data length
+            let data_length = self.read_payload_length(spi)?;
+
+            // Check whether we can actually read the next piece of data
+            if data_length as usize + buffer_idx >= buffer.len() {
+                return Ok(buffer.len() - 1 - buffer_idx);
+            }
+
+            // Read the rx data
+            let mut rx_buffer = [0u8; 33];
+            rx_buffer[0] = Command::ReadRxPayload.opcode();
+            self.safe_transfer_spi(spi, &mut rx_buffer)?;
+
+            // Transfer the data into the buffer
+            buffer[buffer_idx..(buffer_idx + data_length as usize)].copy_from_slice(&rx_buffer[1..(1+data_length as usize)]);
+
+            // Increment the buffer_idx
+            buffer_idx += data_length as usize;
+
+            // Update the next fx pipe number
+            let status = self.read_status(spi)?;
+            pipe_num = status & 0b0000_1110;
+        }
+
+        Ok(buffer_idx)
+    }
+
+    /// Send a payload of up to 32 bytes with or without auto acknowledgement
+    pub async fn send_data(&mut self, payload: &[u8], auto_ack: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        // Convert to Tx State
         if self.state != State::Tx {
             self.to_state(State::Tx, spi).await?;
         }
 
-        let mut iteration = 0;
-        let mut status = 0u8;
-
-        while iteration * 32 < payload.len() {
-            if iteration % 3 == 0 {
-                // Wait for FIFO Queue to clear
-                match self.configuration.data_rate {
-                    DataRate::R250kb => Systick::delay(4u32.millis()).await,
-                    DataRate::R1Mb | DataRate::R2Mb => Systick::delay(1u32.millis()).await,
-                }
-
-                let mut status = self.read_status(spi)?;
-
-                while status.contains_status(StatusRegister::TxFull) {
-                    Systick::delay(1u32.millis()).await;
-                    
-                    status = self.read_status(spi)?;
-                }
-            }
-
-            let mut status_buffer = [0u8; 33];
-            status_buffer[0] = Command::WriteTxPayload.opcode();
-            status_buffer[1..].copy_from_slice(&payload[(iteration * 32)..]);
-
-            self.safe_transfer_spi(spi, &mut status_buffer)?;
-
-            status = status_buffer[0];
-            iteration += 1;
+        // Make sure the data is not too large
+        if payload.len() > 32 {
+            return Err(Error::InvalidDataSize);
         }
 
-        Ok(status)
+        // Wait until the tx FIFO is not full
+        let mut fifo_status = self.read_fifo_status(spi)?;
+        while fifo_status.contains_status(FifoStatusRegister::TxFull) {
+            // Wait for the fifo to not be empty
+            // TODO: Optimize this value
+            Systick::delay(10u32.millis()).await;
+
+            fifo_status = self.read_fifo_status(spi)?;
+        }
+
+        // Write the correct command
+        let mut send_buffer = [0u8; 33];
+        if auto_ack {
+            send_buffer[0] = Command::WriteTxPayload.opcode();
+        } else {
+            send_buffer[0] = Command::WriteTxNoAck.opcode();
+        }
+
+        // Copy in the payload to send
+        send_buffer[1..(1+payload.len())].copy_from_slice(payload);
+
+        // Send the payload
+        self.safe_transfer_spi(spi, &mut send_buffer[..payload.len()])?;
+
+        // Return the device status
+        Ok(send_buffer[0])
     }
 
-    pub async fn write_payload_no_ack(&mut self, payload: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    // Send a payload of longer than 32 Bytes
+    pub async fn send_payloads(&mut self, payload: &[u8], auto_ack: bool, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+        // Convert to Tx State
         if self.state != State::Tx {
             self.to_state(State::Tx, spi).await?;
         }
 
-        let mut iteration = 0;
-        let mut status = 0u8;
+        // Wait until the tx FIFO is not full
+        let mut fifo_status = self.read_fifo_status(spi)?;
+        while fifo_status.contains_status(FifoStatusRegister::TxFull) {
+            // Wait for the fifo to not be empty
+            // TODO: Optimize this value
+            Systick::delay(10u32.millis()).await;
 
-        while iteration * 32 < payload.len() {
-            if iteration % 3 == 0 {
-                // Wait for FIFO Queue to clear
-                match self.configuration.data_rate {
-                    DataRate::R250kb => Systick::delay(4u32.millis()).await,
-                    DataRate::R1Mb | DataRate::R2Mb => Systick::delay(1u32.millis()).await,
-                }
-
-                let mut status = self.read_status(spi)?;
-
-                while status.contains_status(StatusRegister::TxFull) {
-                    Systick::delay(1u32.millis()).await;
-
-                    status = self.read_status(spi)?;
-                }
-            }
-
-            let mut status_buffer = [0u8; 33];
-            status_buffer[0] = Command::WriteTxPayload.opcode();
-            status_buffer[1..].copy_from_slice(&payload[(iteration * 32)..]);
-
-            self.safe_transfer_spi(spi, &mut status_buffer)?;
-
-            status = status_buffer[0];
-            iteration += 1;
+            fifo_status = self.read_fifo_status(spi)?;
         }
 
-        Ok(status)
+        // Send (payload.len() / 32) 32 Byte payloads and 1 (payload.len() % 32) payload
+        for payload_num in 0..(payload.len() / 32) {
+            let mut send_buffer = [0u8; 33];
+            if auto_ack {
+                send_buffer[0] = Command::WriteTxPayload.opcode();
+            } else {
+                send_buffer[0] = Command::WriteTxNoAck.opcode();
+            }
+
+            // Copy in the payload to send
+            send_buffer[1..].copy_from_slice(&payload[(payload_num * 32)..((payload_num + 1) * 32)]);
+            self.safe_transfer_spi(spi, &mut send_buffer)?;
+
+            // Wait until the tx FIFO is not full
+            fifo_status = self.read_fifo_status(spi)?;
+            while fifo_status.contains_status(FifoStatusRegister::TxFull) {
+                // Wait for the fifo to not be empty
+                // TODO: Optimize this value
+                Systick::delay(10u32.millis()).await;
+
+                fifo_status = self.read_fifo_status(spi)?;
+            }
+        }
+
+        // Send (payload.len() % 32) payload
+        let payload_len = payload.len() % 32;
+        if payload_len == 0 {
+            return Ok(());
+        }
+
+        let mut send_buffer = [0u8; 33];
+        if auto_ack {
+            send_buffer[0] = Command::WriteTxPayload.opcode();
+        } else {
+            send_buffer[0] = Command::WriteTxNoAck.opcode();
+        }
+
+        // Copy in the payload to send
+        send_buffer[1..(1+payload_len)].copy_from_slice(&payload[(payload.len()-1-payload_len)..(payload.len()-1)]);
+        self.safe_transfer_spi(spi, &mut send_buffer[0..(1+payload_len)])?;
+
+        Ok(())
     }
 
     pub fn flush_tx(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
@@ -775,6 +836,17 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         Ok(config[1])
     }
 
+    pub fn read_fifo_status(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        let mut status = [Command::ReadRegister(0x17).opcode(), 0x00];
+        self.safe_transfer_spi(spi, &mut status)?;
+        Ok(status[1])
+    }
+
+    pub fn clear_interrupt(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.write_register(0x07, &[0b1011_0000], spi)?;
+        self.read_status(spi)
+    }
+
     fn safe_transfer_spi(&mut self, spi: &mut SPI, buffer: &mut [u8]) -> Result<(), Error<GPIOE, SPIE>> {
         match self.csn.as_mut() {
             Some(csn) => {
@@ -796,7 +868,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
     }
 
-    async fn to_state(&mut self, state: State, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+    pub async fn to_state(&mut self, state: State, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
         if state == self.state {
             return Ok(());
         }
@@ -922,24 +994,52 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             }
         }
 
-        // Write Register and Feature Registers
-        for register in 0x1C..=0x1D {
-            if let Some(pipe_config) = self.configuration.pipe_configs[0] {
-                self.write_register(register, pipe_config.address, spi)?;
+        // Write Base Register and Feature Registers
+        let base_config = self.configuration.pipe_configs[0].unwrap();
+        self.write_register(0x0A, base_config.address, spi)?;
 
-                let mut found_config = [0u8; 5];
+        let mut found_config = [0u8; 5];
+        self.read_register(0x0A, &mut found_config, spi)?;
+
+        for i in 0..base_config.address.len() {
+            if base_config.address[i] != found_config[i] {
+                return Err(Error::UnableToConfigureRegister(0x0A));
+            }
+        }
+
+        // Write Other Pipe Registers
+        let mut pipe_index = 1;
+        for register in 0x0B..=0x0F {
+            if let Some(pipe_config) = self.configuration.pipe_configs[pipe_index] {
+                self.write_register(register, &[pipe_config.address[0]], spi)?;
+
+                let mut found_config = [0u8];
                 self.read_register(register, &mut found_config, spi)?;
 
-                for i in 0..pipe_config.address.len() {
-                    if pipe_config.address[i] != found_config[i] {
-                        return Err(Error::UnableToConfigureRegister(register));
-                    }
+                if found_config[0] != pipe_config.address[0] {
+                    return Err(Error::UnableToConfigureRegister(register))?;
                 }
+            } else {
+                break;
+            }
+
+            pipe_index += 1;
+        }
+
+        // Write Transmit Register
+        self.write_register(0x10, self.configuration.tx_address, spi)?;
+
+        let mut found_config = [0u8; 5];
+        self.read_register(0x10, &mut found_config, spi)?;
+
+        for i in 0..self.configuration.tx_address.len() {
+            if self.configuration.tx_address[i] != found_config[i] {
+                return Err(Error::UnableToConfigureRegister(0x10));
             }
         }
 
         // Write Address Registers
-        for register in 0x0A..=010 {
+        for register in 0x1C..=0x1D {
             let mut config = [0u8];
 
             self.read_register(register, &mut config, spi)?;

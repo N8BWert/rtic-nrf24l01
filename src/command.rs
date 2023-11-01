@@ -13,7 +13,7 @@ pub enum Command {
     ReuseTxPayload,
     ReadRxPayloadWidth,
     WriteAcknowledgePayload(u8),
-    DisableAutoackTx,
+    WriteTxNoAck,
     Nop,
 }
 
@@ -30,7 +30,7 @@ impl Command {
             Self::ReuseTxPayload => 0b1110_0011,
             Self::ReadRxPayloadWidth => 0b0110_0000,
             Self::WriteAcknowledgePayload(payload) => 0b1010_1000 | payload,
-            Self::DisableAutoackTx => 0b1011_0000,
+            Self::WriteTxNoAck => 0b1011_0000,
             Self::Nop => 0b1111_1111,
         }
     }
