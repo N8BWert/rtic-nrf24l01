@@ -10,6 +10,10 @@
 use core::marker::PhantomData;
 
 use config::RegisterValue;
+use config::bit_correction::BitCorrection;
+use config::data_pipe::DataPipeConfig;
+use config::data_rate::DataRate;
+use config::interrupt_mask::InterruptMask;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::blocking::spi::{Transfer, Write};
 #[cfg(feature = "blocking")]
@@ -544,6 +548,198 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         driver.write_full_config(spi)?;
 
         Ok(driver)
+    }
+
+    /// Set the interrupt mask of the nRF24L01 and return the status
+    pub fn set_interrupt_mask(&mut self, interrupt_mask: InterruptMask, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.configuration.interrupt_mask = interrupt_mask;
+
+        let mut register_value = [0u8];
+        self.read_register(0x00, &mut register_value, spi)?;
+        register_value[0] &= 0b1000_1111;
+        register_value[0] |= interrupt_mask.register_value(0x00);
+        self.write_register(0x00, &register_value, spi)
+    }
+    
+    /// Set the bit correction level and method and return the status
+    pub fn set_bit_correction(&mut self, bit_correction: Option<BitCorrection>, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.configuration.bit_correction = bit_correction;
+
+        let mut register_value = [0u8];
+        self.read_register(0x00, &mut register_value, spi)?;
+        register_value[0] &= 0b1111_0011;
+        if let Some(bit_correction) = bit_correction {
+            register_value[0] |= bit_correction.register_value(0x00);
+        }
+
+        self.write_register(0x00, &register_value, spi)
+    }
+
+    /// Set the pipe configuration of a specific pipe and return the status
+    pub fn set_pipe_config(&mut self, pipe: u8, pipe_config: Option<DataPipeConfig<'a>>, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        if pipe > 6 {
+            return Err(Error::InvalidPipeId);
+        }
+
+        if let Some(pipe_config) = pipe_config {
+            if pipe == 0 {
+                if pipe_config.address.len() != self.configuration.address_width.as_u8() as usize {
+                    return Err(Error::InvalidAddressBufferSize);
+                }
+            } else {
+                if pipe_config.address.len() != 1 {
+                    return Err(Error::InvalidAddressBufferSize);
+                }
+            }
+
+            // Set auto acknowledge
+            let mut auto_ack = [0u8];
+            self.read_register(0x01, &mut auto_ack, spi)?;
+            auto_ack[0] &= 0b1111_1111 ^ (1 << pipe);
+            auto_ack[0] |= (pipe_config.auto_acknowledge as u8) << pipe;
+            self.write_register(0x01, &auto_ack, spi)?;
+
+            // Set Enable
+            let mut enabled = [0u8];
+            self.read_register(0x02, &mut enabled, spi)?;
+            enabled[0] &= 0b1111_1111 ^ (1 << pipe);
+            enabled[0] |= (pipe_config.enabled as u8) << pipe;
+            self.write_register(0x02, &enabled, spi)?;
+
+            // Set Dynamic Payload
+            let mut dpl = [0u8];
+            self.read_register(0x1C, &mut dpl, spi)?;
+            dpl[0] &= 0b1111_1111 ^ (1 << pipe);
+            dpl[0] |= (pipe_config.dynamic_payload as u8) << pipe;
+            self.write_register(0x1C, &dpl, spi)?;
+
+            self.configuration.pipe_configs[pipe as usize] = Some(pipe_config);
+
+            self.write_register(0x0A + pipe, pipe_config.address, spi)
+        } else {
+            // Set Auto Acknowledge
+            let mut auto_ack = [0u8];
+            self.read_register(0x01, &mut auto_ack, spi)?;
+            auto_ack[0] &= 0b1111_1111 ^ (1 << pipe);
+            self.write_register(0x01, &auto_ack, spi)?;
+
+            // Set Enable
+            let mut enabled = [0u8];
+            self.read_register(0x02, &mut enabled, spi)?;
+            enabled[0] &= 0b1111_1111 ^ (1 << pipe);
+            self.write_register(0x02, &enabled, spi)?;
+
+            // Set Dynamic Payload
+            let mut dpl = [0u8];
+            self.read_register(0x1C, &mut dpl, spi)?;
+            dpl[0] &= 0b1111_1111 ^ (1 << pipe);
+            self.write_register(0x1C, &dpl, spi)?;
+
+            self.configuration.pipe_configs[pipe as usize] = pipe_config;
+
+            // Set Address
+            if pipe == 0 {
+                self.write_register(0x0A, &[0u8; 5], spi)
+            } else {
+                self.write_register(0x0A + pipe, &[0u8], spi)
+            }
+        }
+    }
+
+    /// Set the data rate for the nRF24L01 module
+    pub fn set_data_rate(&mut self, data_rate: DataRate, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.configuration.data_rate = data_rate;
+
+        let mut register_value = [0u8];
+        self.read_register(0x06, &mut register_value, spi)?;
+        register_value[0] &= 0b1101_0111;
+        register_value[0] |= data_rate.register_value(0x06);
+        self.write_register(0x06, &register_value, spi)
+    }
+
+    /// Set the channel the nRF24L01 module is operating on
+    pub fn set_rf_channel(&mut self, channel: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        if channel >= 128 {
+            return Err(Error::InvalidRfChannel);
+        }
+
+        self.configuration.rf_channel = channel;
+
+        let mut register_value = [0u8];
+        self.read_register(0x05, &mut register_value, spi)?;
+        register_value[0] &= 0b1000_0000;
+        register_value[0] |= channel;
+        self.write_register(0x05, &register_value, spi)
+    }
+
+    /// Set the tx address of the nRF24L01 module
+    pub fn set_tx_address(&mut self, address: &'a [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.configuration.tx_address = address;
+
+        self.write_register(0x10, address, spi)
+    }
+
+    /// Set the retransmit delay of the nRF24L01 module
+    pub fn set_retransmit_delay(&mut self, delay: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        if delay > 31 {
+            return Err(Error::InvalidRetransmitDelay);
+        }
+
+        self.configuration.retransmit_delay = delay;
+
+        let mut register_value = [0u8];
+        self.read_register(0x04, &mut register_value, spi)?;
+        register_value[0] &= 0b0000_1111;
+        register_value[0] |= delay << 4;
+        self.write_register(0x04, &register_value, spi)
+    }
+
+    /// Set the retransmit count of the nRF24L01 module
+    pub fn set_retransmit_count(&mut self, count: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        if count > 31 {
+            return Err(Error::InvalidRetransmitCount);
+        }
+
+        self.configuration.retransmit_count = count;
+
+        let mut register_value = [0u8];
+        self.read_register(0x04, &mut register_value, spi)?;
+        register_value[0] &= 0b1111_0000;
+        register_value[0] |= count;
+        self.write_register(0x04, &register_value, spi)
+    }
+
+    /// Turn on or off dynamic payload length
+    pub fn set_dynamic_payload(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.configuration.dynamic_payload = value;
+
+        let mut register_value = [0u8];
+        self.read_register(0x1D, &mut register_value, spi)?;
+        register_value[0] &= 0b1111_1011;
+        register_value[0] |= (value as u8) << 3;
+        self.write_register(0x1D, &register_value, spi)
+    }
+
+    /// Turn on or off auto acknowledge
+    pub fn set_auto_ack(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.configuration.acknowledge_payload = value;
+
+        let mut register_value = [0u8];
+        self.read_register(0x1D, &mut register_value, spi)?;
+        register_value[0] &= 0b1111_1101;
+        register_value[0] |= (value as u8) << 1;
+        self.write_register(0x1D, &register_value, spi)
+    }
+
+    /// Turn on or off dynamic acknowledgements
+    pub fn set_dynamic_ack(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.configuration.dynamic_payload = value;
+
+        let mut register_value = [0u8];
+        self.read_register(0x1D, &mut register_value, spi)?;
+        register_value[0] &= 0b1111_1110;
+        register_value[0] |= value as u8;
+        self.write_register(0x1D, &register_value, spi)
     }
 
     pub fn read_register(&mut self, register: u8, buffer: &mut [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
