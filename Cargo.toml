@@ -10,10 +10,10 @@ embedded-hal = "0.2.7"
 
 [dependencies.rtic-monotonics]
 version = "1.0.0"
-features = ["cortex-m-systick"]
 optional = true
 
 [features]
-default = ["async"]
+default = ["rp2040"]
 blocking = []
-async = ["dep:rtic-monotonics"]
+systick = ["dep:rtic-monotonics", "rtic-monotonics/cortex-m-systick"]
+rp2040 = ["dep:rtic-monotonics", "rtic-monotonics/rp2040"]
