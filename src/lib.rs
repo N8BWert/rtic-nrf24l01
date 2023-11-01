@@ -28,15 +28,12 @@ pub mod error;
 use error::Error;
 
 pub mod register;
-use register::{StatusRegister, ContainsStatus, ConfigRegister, FifoStatusRegister};
+use register::{ContainsStatus, ConfigRegister, FifoStatusRegister};
 
 #[cfg(feature = "async")]
 use rtic_monotonics::systick::*;
 #[cfg(feature = "async")]
 use rtic_monotonics::systick::ExtU32;
-
-const MAX_FIFO_SIZE: usize = 32 * 3;
-const MAX_PAYLOAD_SIZE: usize = 32;
 
 /// NRF24L01 Driver Implementation with Blocking Delay
 #[cfg(feature = "blocking")]
@@ -613,9 +610,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     /// Read a piece of data from the Rx FIFO of max length 32 returning (data.len(), rx_pipe)
     pub async fn read_data(&mut self, data_buffer: &mut [u8], spi: &mut SPI) -> Result<(u8, u8), Error<GPIOE, SPIE>> {
         // Convert to Rx State
-        if self.state != State::Rx {
-            self.to_state(State::Rx, spi).await?;
-        }
+        self.to_rx(spi).await?;
 
         // Make sure the data_buffer is not too large
         if data_buffer.len() != 32 {
@@ -643,9 +638,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     /// Read data from the device from a given pipe until that pipe is no longer the next incoming data.
     pub async fn read_from_pipe(&mut self, pipe: u8, buffer: &mut [u8], spi: &mut SPI) -> Result<usize, Error<GPIOE, SPIE>> {
         // Convert to Rx State
-        if self.state != State::Rx {
-            self.to_state(State::Rx, spi).await?;
-        }
+        self.to_rx(spi).await?;
 
         // Keep track of where in the buffer we're writing to
         let mut buffer_idx = 0usize;
@@ -847,6 +840,61 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         self.read_status(spi)
     }
 
+    // Convert the nRF24L01 into Rx Mode
+    pub async fn to_rx(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+        if self.state != State::Rx {
+            // Finish sending if there is a send
+            if self.state == State::Tx {
+                self.wait_for_end_tx(spi).await?;
+            }
+
+            self.to_state(State::Rx, spi).await
+        } else {
+            Ok(())
+        }
+    }
+
+    // Convert the nRF24L01 into Standby Mode
+    pub async fn to_standby(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+        if self.state != State::Standby1 {
+            // Finish sending if there is a send
+            if self.state == State::Tx {
+                self.wait_for_end_tx(spi).await?;
+            }
+
+            self.to_state(State::Standby1, spi).await
+        } else {
+            Ok(())
+        }
+    }
+
+    // Convert the nRF24L01 into Power Down Mode
+    pub async fn power_down(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+        if self.state != State::PowerDown {
+            // Finish sending if there is a send
+            if self.state == State::Tx {
+                self.wait_for_end_tx(spi).await?;
+            }
+
+            self.to_state(State::PowerDown, spi).await
+        } else {
+            Ok(())
+        }
+    }
+
+    // Asynchronous wait that checks the Tx FIFO Status
+    async fn wait_for_end_tx(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+        let mut fifo_status = self.read_fifo_status(spi)?;
+        while !fifo_status.contains_status(FifoStatusRegister::TxEmpty) {
+            // TODO: Optimize this wait time
+            Systick::delay(5u32.millis()).await;
+
+            fifo_status = self.read_fifo_status(spi)?;
+        }
+
+        Ok(())
+    }
+
     fn safe_transfer_spi(&mut self, spi: &mut SPI, buffer: &mut [u8]) -> Result<(), Error<GPIOE, SPIE>> {
         match self.csn.as_mut() {
             Some(csn) => {
@@ -868,7 +916,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
     }
 
-    pub async fn to_state(&mut self, state: State, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+    async fn to_state(&mut self, state: State, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
         if state == self.state {
             return Ok(());
         }
