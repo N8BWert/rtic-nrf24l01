@@ -531,7 +531,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     pub async fn new(csn: Option<CSN>, ce: CE, config: Configuration<'a>, spi: &mut SPI) -> Result<Self, Error<GPIOE, SPIE>> {
         // Wait for power on reset
         #[cfg(feature = "systick")]
-        Systick::delay(1200u32.millis()).await;
+        Systick::delay(100u32.millis()).await;
         #[cfg(feature = "rp2040")]
         Timer::delay(200u64.millis()).await;
 
