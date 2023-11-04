@@ -1,7 +1,9 @@
 //! Error for creating a given configuration
 
+use defmt::Format;
+
 /// Configuration Error (only used for ensuring a valid rf channel)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub enum ConfigurationError {
     // The rf channel provided to the configuration is not within the valid range [0,124]
     InvalidRfChannel,

@@ -2,8 +2,10 @@
 
 use super::RegisterValue;
 
+use defmt::Format;
+
 /// The mandatory error detection mechanism in the packet
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub enum BitCorrection {
     // 1 byte CRC bit correction
     CRC1,

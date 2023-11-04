@@ -2,13 +2,15 @@
 
 use super::RegisterValue;
 
+use defmt::Format;
+
 /// The datarate of transmission
 /// 
 /// Using lower air rates gives better receiver sensitivity.
 /// 
 /// Using higher air rates gives lower current consumption and reduced probability
 /// of on-air collisions.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub enum DataRate {
     // 250 kbps
     R250kb,

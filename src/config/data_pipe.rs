@@ -2,8 +2,10 @@
 
 use super::RegisterValue;
 
+use defmt::Format;
+
 /// The Configuration for a singular data pipe
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub struct DataPipeConfig<'a> {
     pub enabled: bool,
     pub auto_acknowledge: bool,

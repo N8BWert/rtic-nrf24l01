@@ -2,6 +2,8 @@
 
 use super::RegisterValue;
 
+use defmt::Format;
+
 /// The power amplifier configuration
 /// 
 /// Output Power | Current Consumption
@@ -14,7 +16,7 @@ use super::RegisterValue;
 /// ----------------------------------
 /// -18dBm       | 7.0mA
 /// ----------------------------------
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub enum PowerAmplifier {
     // Maximum Power Amplifier Level (0dBm)
     PAMax,

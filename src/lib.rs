@@ -531,9 +531,9 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     pub async fn new(csn: Option<CSN>, ce: CE, config: Configuration<'a>, spi: &mut SPI) -> Result<Self, Error<GPIOE, SPIE>> {
         // Wait for power on reset
         #[cfg(feature = "systick")]
-        Systick::delay(100u32.millis()).await;
+        Systick::delay(1200u32.millis()).await;
         #[cfg(feature = "rp2040")]
-        Timer::delay(100u64.millis()).await;
+        Timer::delay(200u64.millis()).await;
 
         let mut driver = Self {
             csn,
@@ -550,14 +550,14 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             driver.write_register(0x00, &[config], spi)?;
 
             #[cfg(feature = "systick")]
-            Systick::delay(1_500.micros()).await;
-            #[cfg(feature = "rp20404")]
-            Timer::delay(1_500u64.micros()).await;
+            Systick::delay(2000u32.micros()).await;
+            #[cfg(feature = "rp2040")]
+            Timer::delay(2000u64.micros()).await;
         }
 
         driver.state = State::Standby1;
 
-        driver.write_full_config(spi)?;
+        driver.write_full_config(spi).await?;
 
         Ok(driver)
     }
@@ -939,7 +939,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             #[cfg(feature = "systick")]
             Systick::delay(10u32.millis()).await;
             #[cfg(feature = "rp2040")]
-            Timer::delay(10u32.millis()).await;
+            Timer::delay(10u64.millis()).await;
 
             fifo_status = self.read_fifo_status(spi)?;
         }
@@ -965,7 +965,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
                 #[cfg(feature = "systick")]
                 Systick::delay(10u32.millis()).await;
                 #[cfg(feature = "rp2040")]
-                Timer::delay(10u32.millis()).await;
+                Timer::delay(10u64.millis()).await;
 
                 fifo_status = self.read_fifo_status(spi)?;
             }
@@ -1271,7 +1271,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         Ok(())
     }
 
-    fn write_full_config(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+    async fn write_full_config(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
         // Write first 7 configs
         for register in 0x00..=0x06 {
             let mut config = [0u8];
@@ -1281,11 +1281,13 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             config[0] |= self.configuration.register_value(register);
             self.write_register(register, &config, spi)?;
 
+            self.wait_for_ms(10).await;
+
             let mut found_config = [0u8];
             self.read_register(register, &mut found_config, spi)?;
 
             if found_config[0] != config[0] {
-                return Err(Error::UnableToConfigureRegister(register));
+                return Err(Error::UnableToConfigureRegister(register, config[0], found_config[0]));
             }
         }
 
@@ -1293,12 +1295,14 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         let base_config = self.configuration.pipe_configs[0].unwrap();
         self.write_register(0x0A, base_config.address, spi)?;
 
+        self.wait_for_ms(10).await;
+
         let mut found_config = [0u8; 5];
         self.read_register(0x0A, &mut found_config, spi)?;
 
         for i in 0..base_config.address.len() {
             if base_config.address[i] != found_config[i] {
-                return Err(Error::UnableToConfigureRegister(0x0A));
+                return Err(Error::UnableToConfigureRegister(0x0A, base_config.address[i], found_config[i]));
             }
         }
 
@@ -1308,11 +1312,13 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             if let Some(pipe_config) = self.configuration.pipe_configs[pipe_index] {
                 self.write_register(register, &[pipe_config.address[0]], spi)?;
 
+                self.wait_for_ms(10).await;
+
                 let mut found_config = [0u8];
                 self.read_register(register, &mut found_config, spi)?;
 
                 if found_config[0] != pipe_config.address[0] {
-                    return Err(Error::UnableToConfigureRegister(register))?;
+                    return Err(Error::UnableToConfigureRegister(register, pipe_config.address[0], found_config[0]))?;
                 }
             } else {
                 break;
@@ -1324,17 +1330,22 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         // Write Transmit Register
         self.write_register(0x10, self.configuration.tx_address, spi)?;
 
+        self.wait_for_ms(10).await;
+
         let mut found_config = [0u8; 5];
         self.read_register(0x10, &mut found_config, spi)?;
 
         for i in 0..self.configuration.tx_address.len() {
             if self.configuration.tx_address[i] != found_config[i] {
-                return Err(Error::UnableToConfigureRegister(0x10));
+                return Err(Error::UnableToConfigureRegister(0x10, self.configuration.tx_address[i], found_config[i]));
             }
         }
 
         // Write Address Registers
-        for register in 0x1C..=0x1D {
+        for register in (0x1C..=0x1D).rev() {
+            let mut activate_instruction = [Command::Activate.opcode(), 0x73];
+            self.safe_transfer_spi(spi, &mut activate_instruction)?;
+
             let mut config = [0u8];
 
             self.read_register(register, &mut config, spi)?;
@@ -1342,14 +1353,26 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             config[0] |= self.configuration.register_value(register);
             self.write_register(register, &config, spi)?;
 
+            self.wait_for_ms(10).await;
+
             let mut found_config = [0u8];
             self.read_register(register, &mut found_config, spi)?;
 
             if found_config[0] != config[0] {
-                return Err(Error::UnableToConfigureRegister(register));
+                return Err(Error::UnableToConfigureRegister(register, config[0], found_config[0]));
             }
         }
 
         Ok(())
+    }
+
+    #[cfg(feature = "systick")]
+    async fn wait_for_ms(&self, ms: u32) {
+        Systick::delay(ms.millis()).await;
+    }
+
+    #[cfg(feature = "rp2040")]
+    async fn wait_for_ms(&self, ms: u64) {
+        Timer::delay(ms.millis()).await;
     }
 }

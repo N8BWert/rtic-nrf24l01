@@ -2,8 +2,10 @@
 
 use super::RegisterValue;
 
+use defmt::Format;
+
 /// The address width of the rx/tx address field
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub enum AddressWidth {
     // 3 byte address width
     A3Bytes = 0x01,

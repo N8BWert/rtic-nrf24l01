@@ -2,8 +2,10 @@
 
 use super::RegisterValue;
 
+use defmt::Format;
+
 /// The interrupt mask for the NRF24l01 Module
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub struct InterruptMask {
     pub mask_rx: bool,
     pub mask_tx: bool,

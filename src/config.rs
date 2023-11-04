@@ -1,5 +1,7 @@
 //! Configuration of the NRF24L01 Module
 
+use defmt::Format;
+
 pub mod address_width;
 use address_width::AddressWidth;
 
@@ -22,7 +24,7 @@ pub mod power_amplifier;
 use power_amplifier::PowerAmplifier;
 
 /// The configuration of the NRF24L01 Module
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Format)]
 pub struct Configuration<'a> {
     // The width of tx/rx addresses
     pub address_width: AddressWidth,
