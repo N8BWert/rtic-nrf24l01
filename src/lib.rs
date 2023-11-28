@@ -543,15 +543,11 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             phantom: PhantomData,
         };
 
-        let mut config = driver.read_config(spi).map_err(|err| { (0u8, err) })?;
-
-        // The Teensy (and I'm assuming other imxrt chips) needs a delay between spi writes
-        #[cfg(feature = "systick")]
-        Systick::delay(1u32.millis()).await;
+        let mut config = driver.read_config(spi).await.map_err(|err| { (0u8, err) })?;
 
         if !config.contains_status(ConfigRegister::PowerUp) {
             config |= ConfigRegister::PowerUp as u8;
-            driver.write_register(0x00, &[config], spi).map_err(|err| { (1u8, err) })?;
+            driver.write_register(0x00, &[config], spi).await.map_err(|err| { (1u8, err) })?;
 
             #[cfg(feature = "systick")]
             Systick::delay(2000u32.micros()).await;
@@ -567,32 +563,32 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     }
 
     /// Set the interrupt mask of the nRF24L01 and return the status
-    pub fn set_interrupt_mask(&mut self, interrupt_mask: InterruptMask, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_interrupt_mask(&mut self, interrupt_mask: InterruptMask, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         self.configuration.interrupt_mask = interrupt_mask;
 
         let mut register_value = [0u8];
-        self.read_register(0x00, &mut register_value, spi)?;
+        self.read_register(0x00, &mut register_value, spi).await?;
         register_value[0] &= 0b1000_1111;
         register_value[0] |= interrupt_mask.register_value(0x00);
-        self.write_register(0x00, &register_value, spi)
+        self.write_register(0x00, &register_value, spi).await
     }
     
     /// Set the bit correction level and method and return the status
-    pub fn set_bit_correction(&mut self, bit_correction: Option<BitCorrection>, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_bit_correction(&mut self, bit_correction: Option<BitCorrection>, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         self.configuration.bit_correction = bit_correction;
 
         let mut register_value = [0u8];
-        self.read_register(0x00, &mut register_value, spi)?;
+        self.read_register(0x00, &mut register_value, spi).await?;
         register_value[0] &= 0b1111_0011;
         if let Some(bit_correction) = bit_correction {
             register_value[0] |= bit_correction.register_value(0x00);
         }
 
-        self.write_register(0x00, &register_value, spi)
+        self.write_register(0x00, &register_value, spi).await
     }
 
     /// Set the pipe configuration of a specific pipe and return the status
-    pub fn set_pipe_config(&mut self, pipe: u8, pipe_config: Option<DataPipeConfig<'a>>, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_pipe_config(&mut self, pipe: u8, pipe_config: Option<DataPipeConfig<'a>>, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         if pipe > 6 {
             return Err(Error::InvalidPipeId);
         }
@@ -610,71 +606,71 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
             // Set auto acknowledge
             let mut auto_ack = [0u8];
-            self.read_register(0x01, &mut auto_ack, spi)?;
+            self.read_register(0x01, &mut auto_ack, spi).await?;
             auto_ack[0] &= 0b1111_1111 ^ (1 << pipe);
             auto_ack[0] |= (pipe_config.auto_acknowledge as u8) << pipe;
-            self.write_register(0x01, &auto_ack, spi)?;
+            self.write_register(0x01, &auto_ack, spi).await?;
 
             // Set Enable
             let mut enabled = [0u8];
-            self.read_register(0x02, &mut enabled, spi)?;
+            self.read_register(0x02, &mut enabled, spi).await?;
             enabled[0] &= 0b1111_1111 ^ (1 << pipe);
             enabled[0] |= (pipe_config.enabled as u8) << pipe;
-            self.write_register(0x02, &enabled, spi)?;
+            self.write_register(0x02, &enabled, spi).await?;
 
             // Set Dynamic Payload
             let mut dpl = [0u8];
-            self.read_register(0x1C, &mut dpl, spi)?;
+            self.read_register(0x1C, &mut dpl, spi).await?;
             dpl[0] &= 0b1111_1111 ^ (1 << pipe);
             dpl[0] |= (pipe_config.dynamic_payload as u8) << pipe;
-            self.write_register(0x1C, &dpl, spi)?;
+            self.write_register(0x1C, &dpl, spi).await?;
 
             self.configuration.pipe_configs[pipe as usize] = Some(pipe_config);
 
-            self.write_register(0x0A + pipe, pipe_config.address, spi)
+            self.write_register(0x0A + pipe, pipe_config.address, spi).await
         } else {
             // Set Auto Acknowledge
             let mut auto_ack = [0u8];
-            self.read_register(0x01, &mut auto_ack, spi)?;
+            self.read_register(0x01, &mut auto_ack, spi).await?;
             auto_ack[0] &= 0b1111_1111 ^ (1 << pipe);
-            self.write_register(0x01, &auto_ack, spi)?;
+            self.write_register(0x01, &auto_ack, spi).await?;
 
             // Set Enable
             let mut enabled = [0u8];
-            self.read_register(0x02, &mut enabled, spi)?;
+            self.read_register(0x02, &mut enabled, spi).await?;
             enabled[0] &= 0b1111_1111 ^ (1 << pipe);
-            self.write_register(0x02, &enabled, spi)?;
+            self.write_register(0x02, &enabled, spi).await?;
 
             // Set Dynamic Payload
             let mut dpl = [0u8];
-            self.read_register(0x1C, &mut dpl, spi)?;
+            self.read_register(0x1C, &mut dpl, spi).await?;
             dpl[0] &= 0b1111_1111 ^ (1 << pipe);
-            self.write_register(0x1C, &dpl, spi)?;
+            self.write_register(0x1C, &dpl, spi).await?;
 
             self.configuration.pipe_configs[pipe as usize] = pipe_config;
 
             // Set Address
             if pipe == 0 {
-                self.write_register(0x0A, &[0u8; 5], spi)
+                self.write_register(0x0A, &[0u8; 5], spi).await
             } else {
-                self.write_register(0x0A + pipe, &[0u8], spi)
+                self.write_register(0x0A + pipe, &[0u8], spi).await
             }
         }
     }
 
     /// Set the data rate for the nRF24L01 module
-    pub fn set_data_rate(&mut self, data_rate: DataRate, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_data_rate(&mut self, data_rate: DataRate, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         self.configuration.data_rate = data_rate;
 
         let mut register_value = [0u8];
-        self.read_register(0x06, &mut register_value, spi)?;
+        self.read_register(0x06, &mut register_value, spi).await?;
         register_value[0] &= 0b1101_0111;
         register_value[0] |= data_rate.register_value(0x06);
-        self.write_register(0x06, &register_value, spi)
+        self.write_register(0x06, &register_value, spi).await
     }
 
     /// Set the channel the nRF24L01 module is operating on
-    pub fn set_rf_channel(&mut self, channel: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_rf_channel(&mut self, channel: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         if channel >= 128 {
             return Err(Error::InvalidRfChannel);
         }
@@ -682,21 +678,21 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         self.configuration.rf_channel = channel;
 
         let mut register_value = [0u8];
-        self.read_register(0x05, &mut register_value, spi)?;
+        self.read_register(0x05, &mut register_value, spi).await?;
         register_value[0] &= 0b1000_0000;
         register_value[0] |= channel;
-        self.write_register(0x05, &register_value, spi)
+        self.write_register(0x05, &register_value, spi).await
     }
 
     /// Set the tx address of the nRF24L01 module
-    pub fn set_tx_address(&mut self, address: &'a [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_tx_address(&mut self, address: &'a [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         self.configuration.tx_address = address;
 
-        self.write_register(0x10, address, spi)
+        self.write_register(0x10, address, spi).await
     }
 
     /// Set the retransmit delay of the nRF24L01 module
-    pub fn set_retransmit_delay(&mut self, delay: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_retransmit_delay(&mut self, delay: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         if delay > 31 {
             return Err(Error::InvalidRetransmitDelay);
         }
@@ -704,14 +700,14 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         self.configuration.retransmit_delay = delay;
 
         let mut register_value = [0u8];
-        self.read_register(0x04, &mut register_value, spi)?;
+        self.read_register(0x04, &mut register_value, spi).await?;
         register_value[0] &= 0b0000_1111;
         register_value[0] |= delay << 4;
-        self.write_register(0x04, &register_value, spi)
+        self.write_register(0x04, &register_value, spi).await
     }
 
     /// Set the retransmit count of the nRF24L01 module
-    pub fn set_retransmit_count(&mut self, count: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_retransmit_count(&mut self, count: u8, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         if count > 31 {
             return Err(Error::InvalidRetransmitCount);
         }
@@ -719,46 +715,46 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         self.configuration.retransmit_count = count;
 
         let mut register_value = [0u8];
-        self.read_register(0x04, &mut register_value, spi)?;
+        self.read_register(0x04, &mut register_value, spi).await?;
         register_value[0] &= 0b1111_0000;
         register_value[0] |= count;
-        self.write_register(0x04, &register_value, spi)
+        self.write_register(0x04, &register_value, spi).await
     }
 
     /// Turn on or off dynamic payload length
-    pub fn set_dynamic_payload(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_dynamic_payload(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         self.configuration.dynamic_payload = value;
 
         let mut register_value = [0u8];
-        self.read_register(0x1D, &mut register_value, spi)?;
+        self.read_register(0x1D, &mut register_value, spi).await?;
         register_value[0] &= 0b1111_1011;
         register_value[0] |= (value as u8) << 3;
-        self.write_register(0x1D, &register_value, spi)
+        self.write_register(0x1D, &register_value, spi).await
     }
 
     /// Turn on or off auto acknowledge
-    pub fn set_auto_ack(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_auto_ack(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         self.configuration.acknowledge_payload = value;
 
         let mut register_value = [0u8];
-        self.read_register(0x1D, &mut register_value, spi)?;
+        self.read_register(0x1D, &mut register_value, spi).await?;
         register_value[0] &= 0b1111_1101;
         register_value[0] |= (value as u8) << 1;
-        self.write_register(0x1D, &register_value, spi)
+        self.write_register(0x1D, &register_value, spi).await
     }
 
     /// Turn on or off dynamic acknowledgements
-    pub fn set_dynamic_ack(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_dynamic_ack(&mut self, value: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         self.configuration.dynamic_payload = value;
 
         let mut register_value = [0u8];
-        self.read_register(0x1D, &mut register_value, spi)?;
+        self.read_register(0x1D, &mut register_value, spi).await?;
         register_value[0] &= 0b1111_1110;
         register_value[0] |= value as u8;
-        self.write_register(0x1D, &register_value, spi)
+        self.write_register(0x1D, &register_value, spi).await
     }
 
-    pub fn read_register(&mut self, register: u8, buffer: &mut [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn read_register(&mut self, register: u8, buffer: &mut [u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         match register {
             // 1 Byte Registers
             0x00..=0x09 | 0x0B..=0x0F | 0x11..=0x17 | 0x1C..=0x1D => {
@@ -767,7 +763,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
                 }
 
                 let mut status = [Command::ReadRegister(register).opcode(), 0x00];
-                self.safe_transfer_spi(spi, &mut status)?;
+                self.safe_transfer_spi(spi, &mut status).await?;
 
                 buffer[0] = status[1];
                 Ok(status[0])
@@ -780,7 +776,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
                 let mut status = [0u8; 6];
                 status[0] = Command::ReadRegister(register).opcode();
-                self.safe_transfer_spi(spi, &mut status)?;
+                self.safe_transfer_spi(spi, &mut status).await?;
 
                 buffer[..].clone_from_slice(&status[1..]);
                 Ok(status[0])
@@ -789,7 +785,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
     }
 
-    pub fn write_register(&mut self, register: u8, data: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn write_register(&mut self, register: u8, data: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         match register {
             // 1 Byte Registers
             0x00..=0x09 | 0x0B..=0x0F | 0x1C..=0x1D => {
@@ -798,7 +794,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
                 }
 
                 let mut status = [Command::WriteRegister(register).opcode(), data[0]];
-                self.safe_transfer_spi(spi, &mut status)?;
+                self.safe_transfer_spi(spi, &mut status).await?;
 
                 Ok(status[0])
             },
@@ -811,7 +807,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
                 let mut status = [0u8; 6];
                 status[0] = Command::WriteRegister(register).opcode();
                 status[1..1+data.len()].copy_from_slice(data);
-                self.safe_transfer_spi(spi, &mut status)?;
+                self.safe_transfer_spi(spi, &mut status).await?;
 
                 Ok(status[0])
             },
@@ -830,16 +826,16 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
 
         // Read the incoming data pipe number
-        let status = self.read_status(spi)?;
+        let status = self.read_status(spi).await?;
         let pipe_num = status & 0b0000_1110;
 
         // Read the incoming data length
-        let data_length = self.read_payload_length(spi)?;
+        let data_length = self.read_payload_length(spi).await?;
 
         // Read the rx data
         let mut rx_buffer = [0u8; 33];
         rx_buffer[0] = Command::ReadRxPayload.opcode();
-        self.safe_transfer_spi(spi, &mut rx_buffer)?;
+        self.safe_transfer_spi(spi, &mut rx_buffer).await?;
 
         // Transfer the data into the buffer
         data_buffer[..].copy_from_slice(&rx_buffer[1..]);
@@ -855,11 +851,11 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         // Keep track of where in the buffer we're writing to
         let mut buffer_idx = 0usize;
 
-        let status = self.read_status(spi)?;
+        let status = self.read_status(spi).await?;
         let mut pipe_num = status & 0b0000_1110;
         while pipe_num == pipe {
             // Read the incoming data length
-            let data_length = self.read_payload_length(spi)?;
+            let data_length = self.read_payload_length(spi).await?;
 
             // Check whether we can actually read the next piece of data
             if data_length as usize + buffer_idx >= buffer.len() {
@@ -869,7 +865,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             // Read the rx data
             let mut rx_buffer = [0u8; 33];
             rx_buffer[0] = Command::ReadRxPayload.opcode();
-            self.safe_transfer_spi(spi, &mut rx_buffer)?;
+            self.safe_transfer_spi(spi, &mut rx_buffer).await?;
 
             // Transfer the data into the buffer
             buffer[buffer_idx..(buffer_idx + data_length as usize)].copy_from_slice(&rx_buffer[1..(1+data_length as usize)]);
@@ -878,7 +874,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             buffer_idx += data_length as usize;
 
             // Update the next fx pipe number
-            let status = self.read_status(spi)?;
+            let status = self.read_status(spi).await?;
             pipe_num = status & 0b0000_1110;
         }
 
@@ -900,7 +896,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
         // Wait until the tx FIFO is not full
         self.wait_for_ms(1).await;
-        let mut fifo_status = self.read_fifo_status(spi).map_err(|err| { (2u8, err) })?;
+        let mut fifo_status = self.read_fifo_status(spi).await.map_err(|err| { (2u8, err) })?;
         while fifo_status.contains_status(FifoStatusRegister::TxFull) {
             // Wait for the fifo to not be empty
             // TODO: Optimize this value
@@ -909,7 +905,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             #[cfg(feature = "rp2040")]
             Timer::delay(10u64.millis()).await;
 
-            fifo_status = self.read_fifo_status(spi).map_err(|err| { (3u8, err)})?;
+            fifo_status = self.read_fifo_status(spi).await.map_err(|err| { (3u8, err)})?;
         }
 
         self.wait_for_ms(1).await;
@@ -926,7 +922,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         send_buffer[1..(1+payload.len())].copy_from_slice(payload);
 
         // Send the payload
-        self.safe_transfer_spi(spi, &mut send_buffer[..payload.len()]).map_err(|err| { (4u8, err) })?;
+        self.safe_transfer_spi(spi, &mut send_buffer[..payload.len()]).await.map_err(|err| { (4u8, err) })?;
 
         // Return the device status
         Ok(send_buffer[0])
@@ -940,7 +936,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
 
         // Wait until the tx FIFO is not full
-        let mut fifo_status = self.read_fifo_status(spi)?;
+        let mut fifo_status = self.read_fifo_status(spi).await?;
         while fifo_status.contains_status(FifoStatusRegister::TxFull) {
             // Wait for the fifo to not be empty
             // TODO: Optimize this value
@@ -949,7 +945,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             #[cfg(feature = "rp2040")]
             Timer::delay(10u64.millis()).await;
 
-            fifo_status = self.read_fifo_status(spi)?;
+            fifo_status = self.read_fifo_status(spi).await?;
         }
 
         // Send (payload.len() / 32) 32 Byte payloads and 1 (payload.len() % 32) payload
@@ -963,10 +959,10 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
             // Copy in the payload to send
             send_buffer[1..].copy_from_slice(&payload[(payload_num * 32)..((payload_num + 1) * 32)]);
-            self.safe_transfer_spi(spi, &mut send_buffer)?;
+            self.safe_transfer_spi(spi, &mut send_buffer).await?;
 
             // Wait until the tx FIFO is not full
-            fifo_status = self.read_fifo_status(spi)?;
+            fifo_status = self.read_fifo_status(spi).await?;
             while fifo_status.contains_status(FifoStatusRegister::TxFull) {
                 // Wait for the fifo to not be empty
                 // TODO: Optimize this value
@@ -975,7 +971,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
                 #[cfg(feature = "rp2040")]
                 Timer::delay(10u64.millis()).await;
 
-                fifo_status = self.read_fifo_status(spi)?;
+                fifo_status = self.read_fifo_status(spi).await?;
             }
         }
 
@@ -994,37 +990,37 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
         // Copy in the payload to send
         send_buffer[1..(1+payload_len)].copy_from_slice(&payload[(payload.len()-1-payload_len)..(payload.len()-1)]);
-        self.safe_transfer_spi(spi, &mut send_buffer[0..(1+payload_len)])?;
+        self.safe_transfer_spi(spi, &mut send_buffer[0..(1+payload_len)]).await?;
 
         Ok(())
     }
 
-    pub fn flush_tx(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn flush_tx(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         let mut status = [Command::FlushTx.opcode()];
-        self.safe_transfer_spi(spi, &mut status)?;
+        self.safe_transfer_spi(spi, &mut status).await?;
         Ok(status[0])
     }
 
-    pub fn flush_rx(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn flush_rx(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         let mut status = [Command::FlushRx.opcode()];
-        self.safe_transfer_spi(spi, &mut status)?;
+        self.safe_transfer_spi(spi, &mut status).await?;
         Ok(status[0])
     }
 
-    pub fn retransmit_payload(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn retransmit_payload(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         let mut status = [Command::ReuseTxPayload.opcode()];
-        self.safe_transfer_spi(spi, &mut status)?;
+        self.safe_transfer_spi(spi, &mut status).await?;
         Ok(status[0])
     }
 
-    pub fn read_payload_length(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn read_payload_length(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         let mut data: [u8; 2] = [0u8; 2];
         data[0] = Command::ReadRxPayloadWidth.opcode();
-        self.safe_transfer_spi(spi, &mut data)?;
+        self.safe_transfer_spi(spi, &mut data).await?;
         Ok(data[1])
     }
 
-    pub fn set_ack_payload(&mut self, pipe: u8, ack_payload: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn set_ack_payload(&mut self, pipe: u8, ack_payload: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         // Handle invalid cases
         if pipe > 5 {
             return Err(Error::InvalidPipeId);
@@ -1037,32 +1033,32 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         write_data[0] = Command::WriteAcknowledgePayload(pipe).opcode();
         write_data[1..].clone_from_slice(ack_payload);
 
-        self.safe_transfer_spi(spi, &mut write_data)?;
+        self.safe_transfer_spi(spi, &mut write_data).await?;
 
         Ok(write_data[0])
     }
 
-    pub fn read_status(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn read_status(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         let mut status = [Command::Nop.opcode()];
-        self.safe_transfer_spi(spi, &mut status)?;
+        self.safe_transfer_spi(spi, &mut status).await?;
         Ok(status[0])
     }
 
-    pub fn read_config(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn read_config(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         let mut config = [Command::ReadRegister(0x00).opcode(), 0x00];
-        self.safe_transfer_spi(spi, &mut config)?;
+        self.safe_transfer_spi(spi, &mut config).await?;
         Ok(config[1])
     }
 
-    pub fn read_fifo_status(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn read_fifo_status(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         let mut status = [Command::ReadRegister(0x17).opcode(), 0x00];
-        self.safe_transfer_spi(spi, &mut status)?;
+        self.safe_transfer_spi(spi, &mut status).await?;
         Ok(status[1])
     }
 
-    pub fn clear_interrupt(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
-        self.write_register(0x07, &[0b1011_0000], spi)?;
-        self.read_status(spi)
+    pub async fn clear_interrupt(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+        self.write_register(0x07, &[0b1011_0000], spi).await?;
+        self.read_status(spi).await
     }
 
     // Convert the nRF24L01 into Rx Mode
@@ -1109,7 +1105,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
     // Asynchronous wait that checks the Tx FIFO Status
     async fn wait_for_end_tx(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
-        let mut fifo_status = self.read_fifo_status(spi)?;
+        let mut fifo_status = self.read_fifo_status(spi).await?;
         while !fifo_status.contains_status(FifoStatusRegister::TxEmpty) {
             // TODO: Optimize this wait time
             #[cfg(feature = "systick")]
@@ -1117,13 +1113,17 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             #[cfg(feature = "rp2040")]
             Timer::delay(5u64.millis()).await;
 
-            fifo_status = self.read_fifo_status(spi)?;
+            fifo_status = self.read_fifo_status(spi).await?;
         }
 
         Ok(())
     }
 
-    fn safe_transfer_spi(&mut self, spi: &mut SPI, buffer: &mut [u8]) -> Result<(), Error<GPIOE, SPIE>> {
+    async fn safe_transfer_spi(&mut self, spi: &mut SPI, buffer: &mut [u8]) -> Result<(), Error<GPIOE, SPIE>> {
+        // For some reason the imxrt hal doesn't block and will return busy when using the spi
+        #[cfg(feature = "systick")]
+        self.wait_for_ms(1u32).await;
+
         match self.csn.as_mut() {
             Some(csn) => {
                 csn.set_low().map_err(Error::GpioError)?;
@@ -1149,7 +1149,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             return Ok(());
         }
 
-        let mut config = self.read_config(spi)?;
+        let mut config = self.read_config(spi).await?;
 
         // There are a few filled in cases that could be done with recursion, but recursion with async functions is
         // no bueno
@@ -1157,7 +1157,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             (State::PowerDown, State::Standby1) => {
                 if !config.contains_status(ConfigRegister::PowerUp) {
                     config |= ConfigRegister::PowerUp as u8;
-                    self.write_register(0x00, &[config], spi)?;
+                    self.write_register(0x00, &[config], spi).await?;
                     #[cfg(feature = "systick")]
                     Systick::delay(1500u32.micros()).await;
                     #[cfg(feature = "rp2040")]
@@ -1169,7 +1169,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             (State::Standby1, State::Rx) => {
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
-                self.write_register(0x00, &[config], spi)?;
+                self.write_register(0x00, &[config], spi).await?;
                 #[cfg(feature = "systick")]
                 Systick::delay(130u32.micros()).await;
                 #[cfg(feature = "rp2040")]
@@ -1180,7 +1180,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             (State::Standby1, State::Tx) => {
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
-                self.write_register(0x00, &[config], spi)?;
+                self.write_register(0x00, &[config], spi).await?;
                 #[cfg(feature = "systick")]
                 Systick::delay(140u32.micros()).await;
                 #[cfg(feature = "rp2040")]
@@ -1195,14 +1195,14 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             },
             (State::Standby1, State::PowerDown) => {
                 config &= !(ConfigRegister::PowerUp as u8);
-                self.write_register(0x00, &[config], spi)?;
+                self.write_register(0x00, &[config], spi).await?;
                 
                 self.state = State::PowerDown;
             },
             (State::PowerDown, State::Rx) => {
                 if !config.contains_status(ConfigRegister::PowerUp) {
                     config |= ConfigRegister::PowerUp as u8;
-                    self.write_register(0x00, &[config], spi)?;
+                    self.write_register(0x00, &[config], spi).await?;
                     #[cfg(feature = "systick")]
                     Systick::delay(1500u32.micros()).await;
                     #[cfg(feature = "rp2040")]
@@ -1213,7 +1213,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
-                self.write_register(0x00, &[config], spi)?;
+                self.write_register(0x00, &[config], spi).await?;
                 #[cfg(feature = "systick")]
                 Systick::delay(130u32.micros()).await;
                 #[cfg(feature = "rp2040")]
@@ -1224,7 +1224,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             (State::PowerDown, State::Tx) => {
                 if !config.contains_status(ConfigRegister::PowerUp) {
                     config |= ConfigRegister::PowerUp as u8;
-                    self.write_register(0x00, &[config], spi)?;
+                    self.write_register(0x00, &[config], spi).await?;
                     #[cfg(feature = "systick")]
                     Systick::delay(1500u32.micros()).await;
                     #[cfg(feature = "rp2040")]
@@ -1235,7 +1235,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
-                self.write_register(0x00, &[config], spi)?;
+                self.write_register(0x00, &[config], spi).await?;
                 #[cfg(feature = "systick")]
                 Systick::delay(140u32.micros()).await;
                 #[cfg(feature = "rp2040")]
@@ -1250,7 +1250,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
-                self.write_register(0x00, &[config], spi)?;
+                self.write_register(0x00, &[config], spi).await?;
                 #[cfg(feature = "systick")]
                 Systick::delay(140u32.micros()).await;
                 #[cfg(feature = "rp2040")]
@@ -1265,7 +1265,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
-                self.write_register(0x00, &[config], spi)?;
+                self.write_register(0x00, &[config], spi).await?;
                 #[cfg(feature = "systick")]
                 Systick::delay(130u32.micros()).await;
                 #[cfg(feature = "rp2040")]
@@ -1284,18 +1284,15 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         for register in 0x00..=0x06 {
             let mut config = [0u8];
 
-            self.read_register(register, &mut config, spi).map_err(|err| { (register, err) })?;
+            self.read_register(register, &mut config, spi).await.map_err(|err| { (register, err) })?;
             config[0] &= self.configuration.register_mask(register);
             config[0] |= self.configuration.register_value(register);
-            self.wait_for_ms(10).await;
-            self.write_register(register, &config, spi).map_err(|err| { (register, err) })?;
+            self.write_register(register, &config, spi).await.map_err(|err| { (register, err) })?;
 
             self.wait_for_ms(10).await;
 
             let mut found_config = [0u8];
-            self.read_register(register, &mut found_config, spi).map_err(|err| { (register, err) })?;
-
-            self.wait_for_ms(10).await;
+            self.read_register(register, &mut found_config, spi).await.map_err(|err| { (register, err) })?;
 
             if found_config[0] != config[0] {
                 return Err((register, Error::UnableToConfigureRegister(register, config[0], found_config[0])));
@@ -1304,12 +1301,12 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
 
         // Write Base Register and Feature Registers
         let base_config = self.configuration.pipe_configs[0].unwrap();
-        self.write_register(0x0A, base_config.address, spi).map_err(|err| { (0x0A, err) })?;
+        self.write_register(0x0A, base_config.address, spi).await.map_err(|err| { (0x0A, err) })?;
 
         self.wait_for_ms(10).await;
 
         let mut found_config = [0u8; 5];
-        self.read_register(0x0A, &mut found_config, spi).map_err(|err| { (0x0A, err)})?;
+        self.read_register(0x0A, &mut found_config, spi).await.map_err(|err| { (0x0A, err)})?;
 
         for i in 0..base_config.address.len() {
             if base_config.address[i] != found_config[i] {
@@ -1317,20 +1314,16 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             }
         }
 
-        self.wait_for_ms(10).await;
-
         // Write Other Pipe Registers
         let mut pipe_index = 1;
         for register in 0x0B..=0x0F {
             if let Some(pipe_config) = self.configuration.pipe_configs[pipe_index] {
-                self.write_register(register, &[pipe_config.address[0]], spi).map_err(|err| { (register, err)})?;
+                self.write_register(register, &[pipe_config.address[0]], spi).await.map_err(|err| { (register, err)})?;
 
                 self.wait_for_ms(10).await;
 
                 let mut found_config = [0u8];
-                self.read_register(register, &mut found_config, spi).map_err(|err| { (register, err)})?;
-
-                self.wait_for_ms(10).await;
+                self.read_register(register, &mut found_config, spi).await.map_err(|err| { (register, err)})?;
 
                 if found_config[0] != pipe_config.address[0] {
                     return Err(Error::UnableToConfigureRegister(register, pipe_config.address[0], found_config[0])).map_err(|err| { (register, err)})?;
@@ -1343,14 +1336,12 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
 
         // Write Transmit Register
-        self.write_register(0x10, self.configuration.tx_address, spi).map_err(|err| { (0x10, err)})?;
+        self.write_register(0x10, self.configuration.tx_address, spi).await.map_err(|err| { (0x10, err)})?;
 
         self.wait_for_ms(10).await;
 
         let mut found_config = [0u8; 5];
-        self.read_register(0x10, &mut found_config, spi).map_err(|err| { (0x10, err)})?;
-
-        self.wait_for_ms(10).await;
+        self.read_register(0x10, &mut found_config, spi).await.map_err(|err| { (0x10, err)})?;
 
         for i in 0..self.configuration.tx_address.len() {
             if self.configuration.tx_address[i] != found_config[i] {
@@ -1361,23 +1352,19 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         // Write Address Registers
         for register in (0x1C..=0x1D).rev() {
             let mut activate_instruction = [Command::Activate.opcode(), 0x73];
-            self.safe_transfer_spi(spi, &mut activate_instruction).map_err(|err| { (register, err)})?;
-            self.wait_for_ms(1).await;
+            self.safe_transfer_spi(spi, &mut activate_instruction).await.map_err(|err| { (register, err)})?;
 
             let mut config = [0u8];
 
-            self.read_register(register, &mut config, spi).map_err(|err| { (register, err)})?;
+            self.read_register(register, &mut config, spi).await.map_err(|err| { (register, err)})?;
             config[0] &= self.configuration.register_mask(register);
             config[0] |= self.configuration.register_value(register);
-            self.wait_for_ms(1).await;
-            self.write_register(register, &config, spi).map_err(|err| { (register, err)})?;
+            self.write_register(register, &config, spi).await.map_err(|err| { (register, err)})?;
 
             self.wait_for_ms(10).await;
 
             let mut found_config = [0u8];
-            self.read_register(register, &mut found_config, spi).map_err(|err| { (register, err)})?;
-
-            self.wait_for_ms(10).await;
+            self.read_register(register, &mut found_config, spi).await.map_err(|err| { (register, err)})?;
 
             if found_config[0] != config[0] {
                 return Err((register, Error::UnableToConfigureRegister(register, config[0], found_config[0])));
