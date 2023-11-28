@@ -69,7 +69,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
     DELAY: DelayUs<u32> {
     pub fn new(csn: Option<CSN>, ce: CE, config: Configuration<'a>, spi: &mut SPI, delay: &mut DELAY) -> Result<Self, Error<GPIOE, SPIE>> {
         // Wait for power on reset
-        delay.delay_us(100_000u32);
+        delay.delay_us(200_000u32);
 
         let mut driver = Self {
             csn,
@@ -84,7 +84,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
         if !config.contains_status(ConfigRegister::PowerUp) {
             config |= ConfigRegister::PowerUp as u8;
             driver.write_register(0x00, &[config], spi)?;
-            delay.delay_us(1_500u32);
+            delay.delay_us(2_000u32);
         }
 
         driver.state = State::Standby1;
@@ -128,7 +128,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
     pub fn write_register(&mut self, register: u8, data: &[u8], spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         match register {
             // 1 Byte Registers
-            0x00..=0x09 | 0x11..=0x17 | 0x1C..=0x1D => {
+            0x00..=0x09 | 0x0B..=0x0F | 0x1C..=0x1D => {
                 if data.len() != 1 {
                     return Err(Error::InvalidRegisterBufferSize(register));
                 }
@@ -139,7 +139,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
                 Ok(status[0])
             },
             // Address Registers (5 Byte Maximum)
-            0x0A..=0x10 => {
+            0x0A | 0x10 => {
                 if data.len() != self.configuration.address_width.as_u8() as usize {
                     return Err(Error::InvalidAddressBufferSize);
                 }
