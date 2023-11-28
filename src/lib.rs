@@ -528,10 +528,10 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     CSN: OutputPin<Error = GPIOE>,
     CE: OutputPin<Error = GPIOE>,
     SPI: Transfer<u8, Error = SPIE> + Write<u8, Error = SPIE> {
-    pub async fn new(csn: Option<CSN>, ce: CE, config: Configuration<'a>, spi: &mut SPI) -> Result<Self, Error<GPIOE, SPIE>> {
+    pub async fn new(csn: Option<CSN>, ce: CE, config: Configuration<'a>, spi: &mut SPI) -> Result<Self, (u8, Error<GPIOE, SPIE>)> {
         // Wait for power on reset
         #[cfg(feature = "systick")]
-        Systick::delay(100u32.millis()).await;
+        Systick::delay(200u32.millis()).await;
         #[cfg(feature = "rp2040")]
         Timer::delay(200u64.millis()).await;
 
@@ -543,11 +543,15 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             phantom: PhantomData,
         };
 
-        let mut config = driver.read_config(spi)?;
+        let mut config = driver.read_config(spi).map_err(|err| { (0u8, err) })?;
+
+        // The Teensy (and I'm assuming other imxrt chips) needs a delay between spi writes
+        #[cfg(feature = "systick")]
+        Systick::delay(1u32.millis()).await;
 
         if !config.contains_status(ConfigRegister::PowerUp) {
             config |= ConfigRegister::PowerUp as u8;
-            driver.write_register(0x00, &[config], spi)?;
+            driver.write_register(0x00, &[config], spi).map_err(|err| { (1u8, err) })?;
 
             #[cfg(feature = "systick")]
             Systick::delay(2000u32.micros()).await;
@@ -882,19 +886,21 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
     }
 
     /// Send a payload of up to 32 bytes with or without auto acknowledgement
-    pub async fn send_data(&mut self, payload: &[u8], auto_ack: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
+    pub async fn send_data(&mut self, payload: &[u8], auto_ack: bool, spi: &mut SPI) -> Result<u8, (u8, Error<GPIOE, SPIE>)> {
         // Convert to Tx State
         if self.state != State::Tx {
-            self.to_state(State::Tx, spi).await?;
+            self.wait_for_ms(1).await;
+            self.to_state(State::Tx, spi).await.map_err(|err| { (0u8, err) })?;
         }
 
         // Make sure the data is not too large
         if payload.len() > 32 {
-            return Err(Error::InvalidDataSize);
+            return Err((1u8, Error::InvalidDataSize));
         }
 
         // Wait until the tx FIFO is not full
-        let mut fifo_status = self.read_fifo_status(spi)?;
+        self.wait_for_ms(1).await;
+        let mut fifo_status = self.read_fifo_status(spi).map_err(|err| { (2u8, err) })?;
         while fifo_status.contains_status(FifoStatusRegister::TxFull) {
             // Wait for the fifo to not be empty
             // TODO: Optimize this value
@@ -903,8 +909,10 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
             #[cfg(feature = "rp2040")]
             Timer::delay(10u64.millis()).await;
 
-            fifo_status = self.read_fifo_status(spi)?;
+            fifo_status = self.read_fifo_status(spi).map_err(|err| { (3u8, err)})?;
         }
+
+        self.wait_for_ms(1).await;
 
         // Write the correct command
         let mut send_buffer = [0u8; 33];
@@ -918,7 +926,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         send_buffer[1..(1+payload.len())].copy_from_slice(payload);
 
         // Send the payload
-        self.safe_transfer_spi(spi, &mut send_buffer[..payload.len()])?;
+        self.safe_transfer_spi(spi, &mut send_buffer[..payload.len()]).map_err(|err| { (4u8, err) })?;
 
         // Return the device status
         Ok(send_buffer[0])
@@ -1271,54 +1279,61 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         Ok(())
     }
 
-    async fn write_full_config(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+    async fn write_full_config(&mut self, spi: &mut SPI) -> Result<(), (u8, Error<GPIOE, SPIE>)> {
         // Write first 7 configs
         for register in 0x00..=0x06 {
             let mut config = [0u8];
 
-            self.read_register(register, &mut config, spi)?;
+            self.read_register(register, &mut config, spi).map_err(|err| { (register, err) })?;
             config[0] &= self.configuration.register_mask(register);
             config[0] |= self.configuration.register_value(register);
-            self.write_register(register, &config, spi)?;
+            self.wait_for_ms(10).await;
+            self.write_register(register, &config, spi).map_err(|err| { (register, err) })?;
 
             self.wait_for_ms(10).await;
 
             let mut found_config = [0u8];
-            self.read_register(register, &mut found_config, spi)?;
+            self.read_register(register, &mut found_config, spi).map_err(|err| { (register, err) })?;
+
+            self.wait_for_ms(10).await;
 
             if found_config[0] != config[0] {
-                return Err(Error::UnableToConfigureRegister(register, config[0], found_config[0]));
+                return Err((register, Error::UnableToConfigureRegister(register, config[0], found_config[0])));
             }
         }
 
         // Write Base Register and Feature Registers
         let base_config = self.configuration.pipe_configs[0].unwrap();
-        self.write_register(0x0A, base_config.address, spi)?;
+        self.write_register(0x0A, base_config.address, spi).map_err(|err| { (0x0A, err) })?;
 
         self.wait_for_ms(10).await;
 
         let mut found_config = [0u8; 5];
-        self.read_register(0x0A, &mut found_config, spi)?;
+        self.read_register(0x0A, &mut found_config, spi).map_err(|err| { (0x0A, err)})?;
 
         for i in 0..base_config.address.len() {
             if base_config.address[i] != found_config[i] {
-                return Err(Error::UnableToConfigureRegister(0x0A, base_config.address[i], found_config[i]));
+                return Err((0x0A, Error::UnableToConfigureRegister(0x0A, base_config.address[i], found_config[i])));
             }
         }
+
+        self.wait_for_ms(10).await;
 
         // Write Other Pipe Registers
         let mut pipe_index = 1;
         for register in 0x0B..=0x0F {
             if let Some(pipe_config) = self.configuration.pipe_configs[pipe_index] {
-                self.write_register(register, &[pipe_config.address[0]], spi)?;
+                self.write_register(register, &[pipe_config.address[0]], spi).map_err(|err| { (register, err)})?;
 
                 self.wait_for_ms(10).await;
 
                 let mut found_config = [0u8];
-                self.read_register(register, &mut found_config, spi)?;
+                self.read_register(register, &mut found_config, spi).map_err(|err| { (register, err)})?;
+
+                self.wait_for_ms(10).await;
 
                 if found_config[0] != pipe_config.address[0] {
-                    return Err(Error::UnableToConfigureRegister(register, pipe_config.address[0], found_config[0]))?;
+                    return Err(Error::UnableToConfigureRegister(register, pipe_config.address[0], found_config[0])).map_err(|err| { (register, err)})?;
                 }
             } else {
                 break;
@@ -1328,38 +1343,44 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SPI> wher
         }
 
         // Write Transmit Register
-        self.write_register(0x10, self.configuration.tx_address, spi)?;
+        self.write_register(0x10, self.configuration.tx_address, spi).map_err(|err| { (0x10, err)})?;
 
         self.wait_for_ms(10).await;
 
         let mut found_config = [0u8; 5];
-        self.read_register(0x10, &mut found_config, spi)?;
+        self.read_register(0x10, &mut found_config, spi).map_err(|err| { (0x10, err)})?;
+
+        self.wait_for_ms(10).await;
 
         for i in 0..self.configuration.tx_address.len() {
             if self.configuration.tx_address[i] != found_config[i] {
-                return Err(Error::UnableToConfigureRegister(0x10, self.configuration.tx_address[i], found_config[i]));
+                return Err((0x10, Error::UnableToConfigureRegister(0x10, self.configuration.tx_address[i], found_config[i])));
             }
         }
 
         // Write Address Registers
         for register in (0x1C..=0x1D).rev() {
             let mut activate_instruction = [Command::Activate.opcode(), 0x73];
-            self.safe_transfer_spi(spi, &mut activate_instruction)?;
+            self.safe_transfer_spi(spi, &mut activate_instruction).map_err(|err| { (register, err)})?;
+            self.wait_for_ms(1).await;
 
             let mut config = [0u8];
 
-            self.read_register(register, &mut config, spi)?;
+            self.read_register(register, &mut config, spi).map_err(|err| { (register, err)})?;
             config[0] &= self.configuration.register_mask(register);
             config[0] |= self.configuration.register_value(register);
-            self.write_register(register, &config, spi)?;
+            self.wait_for_ms(1).await;
+            self.write_register(register, &config, spi).map_err(|err| { (register, err)})?;
 
             self.wait_for_ms(10).await;
 
             let mut found_config = [0u8];
-            self.read_register(register, &mut found_config, spi)?;
+            self.read_register(register, &mut found_config, spi).map_err(|err| { (register, err)})?;
+
+            self.wait_for_ms(10).await;
 
             if found_config[0] != config[0] {
-                return Err(Error::UnableToConfigureRegister(register, config[0], found_config[0]));
+                return Err((register, Error::UnableToConfigureRegister(register, config[0], found_config[0])));
             }
         }
 
