@@ -55,6 +55,7 @@ pub struct NRF24L01<
     DELAY: DelayUs<u32> + DelayMs<u32>> {
     csn: Option<CSN>,
     ce: CE,
+    ce_high: bool,
     state: State,
     configuration: Configuration<'a>,
     phantom: PhantomData<(SPI, DELAY)>,
@@ -65,13 +66,16 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
     CE: OutputPin<Error = GPIOE>,
     SPI: Transfer<u8, Error = SPIE> + Write<u8, Error = SPIE>,
     DELAY: DelayUs<u32> + DelayMs<u32> {
-    pub fn new(csn: Option<CSN>, ce: CE, config: Configuration<'a>, spi: &mut SPI, delay: &mut DELAY) -> Result<Self, Error<GPIOE, SPIE>> {
+    pub fn new(csn: Option<CSN>, mut ce: CE, config: Configuration<'a>, spi: &mut SPI, delay: &mut DELAY) -> Result<Self, Error<GPIOE, SPIE>> {
         // Wait for power on reset
         delay.delay_us(200_000u32);
+
+        ce.set_low().map_err(Error::GpioError)?;
 
         let mut driver = Self {
             csn,
             ce,
+            ce_high: false,
             state: State::PowerDown,
             configuration: config,
             phantom: PhantomData,
@@ -92,16 +96,11 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
         Ok(driver)
     }
 
-    /// Enqueu a Packet into the Radio FIFO
+    /// Enqueue a Packet into the Radio FIFO
     pub fn send_packet(&mut self, packet: &[u8], auto_ack: bool, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
         // Ensure value payload length
         if packet.len() > 32 {
             return Err(Error::InvalidDataSize);
-        }
-
-        // Check that it is in Tx State
-        if self.state != State::Tx {
-            return Err(Error::SwitchToTx);
         }
 
         // Format the Packet
@@ -390,7 +389,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
     }
 
     pub fn clear_interrupts(&mut self, spi: &mut SPI) -> Result<u8, Error<GPIOE, SPIE>> {
-        self.write_register(0x07, &[0b1011_0000], spi)?;
+        self.write_register(0x07, &[0b0111_0000], spi)?;
         self.read_status(spi)
     }
 
@@ -444,9 +443,9 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
                     return Err(Error::InvalidAddressBufferSize);
                 }
 
-                let mut status = [0u8; 5];
+                let mut status = [0u8; 6];
                 status[0] = Command::WriteRegister(register).opcode();
-                status[1..].copy_from_slice(data);
+                status[1..=data.len()].copy_from_slice(data);
                 self.safe_transfer_spi(spi, &mut status)?;
 
                 Ok(status[0])
@@ -480,6 +479,40 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
         } else {
             Ok(())
         }
+    }
+
+    pub fn to_tx(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), Error<GPIOE, SPIE>> {
+        if self.state != State::Tx {
+            self.to_state(State::Tx, spi, delay)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(any(feature = "systick", feature = "rp2040"))]
+    pub async fn async_to_tx(&mut self, spi: &mut SPI) -> Result<(), Error<GPIOE, SPIE>> {
+        if self.state != State::Tx {
+            self.async_to_state(State::Tx, spi).await
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn pulse_tx(&mut self, delay: &mut DELAY) -> Result<(), Error<GPIOE, SPIE>> {
+        self.ce.set_high().map_err(Error::GpioError)?;
+        self.ce_high = true;
+        delay.delay_us(11);
+        self.ce_high = false;
+        self.ce.set_low().map_err(Error::GpioError)
+    }
+
+    #[cfg(any(feature = "systick", feature = "rp2040"))]
+    pub async fn async_pulse_tx(&mut self) -> Result<(), Error<GPIOE, SPIE>> {
+        self.ce_high = true;
+        self.ce.set_high().map_err(Error::GpioError)?;
+        self.wait_for_us(11).await;
+        self.ce_high = true;
+        self.ce.set_low().map_err(Error::GpioError)
     }
 
     // Convert the radio into standby mode
@@ -536,6 +569,32 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             self.async_to_state(State::PowerDown, spi).await
         } else {
             Ok(())
+        }
+    }
+
+    pub fn get_state(&mut self, spi: &mut SPI) -> Result<State, Error<GPIOE, SPIE>> {
+        // Read some register
+        let config = self.read_config(spi)?;
+        let fifo_status = self.read_fifo_status(spi)?;
+
+        match config & 0b0000_0011 {
+            3 => {
+                if self.ce_high {
+                    Ok(State::Rx)
+                } else {
+                    Ok(State::Standby1)
+                }
+            },
+            2 => {
+                if self.ce_high && fifo_status & 0b0001_0000 == 0 {
+                    Ok(State::Tx)
+                } else if self.ce_high && fifo_status & 0b0001_0000 != 0 {
+                    Ok(State::Standby2)
+                } else {
+                    Ok(State::Standby1)
+                }
+            }
+            _ => Ok(State::PowerDown),
         }
     }
 
@@ -609,6 +668,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             (State::Standby1, State::Rx) => {
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 delay.delay_us(130u32);
 
@@ -617,6 +677,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             (State::Standby1, State::Tx) => {
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 delay.delay_us(140u32);
 
@@ -624,6 +685,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             },
             (State::Tx, State::Standby1) | (State::Rx, State::Standby1) => {
                 self.ce.set_low().map_err(Error::GpioError)?;
+                self.ce_high = false;
 
                 self.state = State::Standby1;
             },
@@ -644,6 +706,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
 
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 delay.delay_us(130u32);
 
@@ -660,6 +723,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
 
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 delay.delay_us(140u32);
 
@@ -667,11 +731,13 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             },
             (State::Rx, State::Tx) => {
                 self.ce.set_low().map_err(Error::GpioError)?;
+                self.ce_high = false;
 
                 self.state = State::Standby1;
 
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 delay.delay_us(140u32);
 
@@ -679,11 +745,13 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             },
             (State::Tx, State::Rx) => {
                 self.ce.set_low().map_err(Error::GpioError)?;
+                self.ce_high = false;
 
                 self.state = State::Standby1;
 
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 delay.delay_us(130u32);
 
@@ -718,6 +786,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             (State::Standby1, State::Rx) => {
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 self.wait_for_us(130).await;
 
@@ -726,6 +795,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             (State::Standby1, State::Tx) => {
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 self.wait_for_us(140).await;
 
@@ -733,6 +803,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             },
             (State::Tx, State::Standby1) | (State::Rx, State::Standby1) => {
                 self.ce.set_low().map_err(Error::GpioError)?;
+                self.ce_high = false;
 
                 self.state = State::Standby1;
             },
@@ -753,6 +824,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
 
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 self.wait_for_us(130).await;
 
@@ -769,6 +841,7 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
 
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 self.wait_for_us(140).await;
 
@@ -776,11 +849,13 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             },
             (State::Rx, State::Tx) => {
                 self.ce.set_low().map_err(Error::GpioError)?;
+                self.ce_high = false;
 
                 self.state = State::Standby1;
 
                 config &= !(ConfigRegister::RxTxControl as u8);
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 self.wait_for_us(140).await;
 
@@ -788,11 +863,13 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
             },
             (State::Tx, State::Rx) => {
                 self.ce.set_low().map_err(Error::GpioError)?;
+                self.ce_high = false;
 
                 self.state = State::Standby1;
 
                 config |= ConfigRegister::RxTxControl as u8;
                 self.ce.set_high().map_err(Error::GpioError)?;
+                self.ce_high = true;
                 self.write_register(0x00, &[config], spi)?;
                 self.wait_for_us(130).await;
 
