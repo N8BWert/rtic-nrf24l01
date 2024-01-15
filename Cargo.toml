@@ -15,6 +15,5 @@ optional = true
 
 [features]
 default = []
-blocking = []
 systick = ["dep:rtic-monotonics", "rtic-monotonics/cortex-m-systick"]
 rp2040 = ["dep:rtic-monotonics", "rtic-monotonics/rp2040"]

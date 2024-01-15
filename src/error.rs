@@ -14,6 +14,8 @@ pub enum Error<GPIOE, SPIE> {
     InvalidRfChannel,
     InvalidRetransmitDelay,
     InvalidRetransmitCount,
+    SwitchToTx,
+    SwitchToRx,
     UnableToConfigureRegister(u8, u8, u8),
     GpioError(GPIOE),
     SpiError(SPIE),
