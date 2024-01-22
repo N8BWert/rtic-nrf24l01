@@ -1,6 +1,7 @@
 //! The address width for all pipes in the nRF24L01 setup
 
 use super::RegisterValue;
+use crate::register::Register;
 
 use defmt::Format;
 
@@ -8,11 +9,11 @@ use defmt::Format;
 #[derive(Debug, Clone, Copy, Format)]
 pub enum AddressWidth {
     // 3 byte address width
-    A3Bytes = 0x01,
+    A3Bytes = 1,
     // 4 byte address width
-    A4Bytes = 0x10,
+    A4Bytes = 2,
     // 5 byte address width
-    A5Bytes = 0x11,
+    A5Bytes = 3,
 }
 
 impl AddressWidth {
@@ -27,15 +28,11 @@ impl AddressWidth {
 }
 
 impl RegisterValue for AddressWidth {
-    fn register_value(&self, address: u8) -> u8 {
-        if address == 0x03 {
-            match self {
-                Self::A3Bytes => 0b0000_0001,
-                Self::A4Bytes => 0b0000_0010,
-                Self::A5Bytes => 0b0000_0011,
-            }
+    fn register_value(&self, register: Register) -> Option<u8> {
+        if register == Register::SetupAddressWidths {
+            Some(self.as_u8())
         } else {
-            return 0u8;
+            None
         }
     }
 }

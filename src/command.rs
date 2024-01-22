@@ -14,26 +14,26 @@ pub enum Command {
     Activate,
     ReadRxPayloadWidth,
     WriteAcknowledgePayload(u8),
-    WriteTxNoAck,
     Nop,
+    RegisterMask,
 }
 
 impl Command {
     // Parse the opcode of command from the command itself
     pub fn opcode(&self) -> u8 {
         match self {
-            Self::ReadRegister(register) => 0b0000_0000 | register,
-            Self::WriteRegister(register) => 0b0010_0000 | register,
-            Self::ReadRxPayload => 0b0110_0001,
-            Self::WriteTxPayload => 0b1010_0000,
-            Self::FlushTx => 0b1110_0001,
-            Self::FlushRx => 0b1110_0010,
-            Self::ReuseTxPayload => 0b1110_0011,
-            Self::Activate => 0b0101_0000,
-            Self::ReadRxPayloadWidth => 0b0110_0000,
-            Self::WriteAcknowledgePayload(payload) => 0b1010_1000 | payload,
-            Self::WriteTxNoAck => 0b1011_0000,
-            Self::Nop => 0b1111_1111,
+            Self::ReadRegister(register) => 0x00 | register,
+            Self::WriteRegister(register) => 0x20 | register,
+            Self::ReadRxPayload => 0x61,
+            Self::WriteTxPayload => 0xA0,
+            Self::FlushTx => 0xE1,
+            Self::FlushRx => 0xE2,
+            Self::ReuseTxPayload => 0xE3,
+            Self::Activate => 0x50,
+            Self::ReadRxPayloadWidth => 0x60,
+            Self::WriteAcknowledgePayload(payload) => 0xA8 | payload,
+            Self::Nop => 0xFF,
+            Self::RegisterMask => 0x1F,
         }
     }
 }

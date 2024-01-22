@@ -33,6 +33,8 @@
 /// -----------------------------------------------------
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum State {
+    // Unknown state (exists before the radio has been initialized with radio.begin)
+    Uninitialized,
     // Registers are maintained, but the module cannot do anything until
     // turned on
     PowerDown,

@@ -2,6 +2,16 @@
 //! Error for the NRF24L01 Module
 //! 
 
+use crate::register::Register;
+
+pub enum RadioError {
+    InvalidBufferLength,
+    InvalidRfChannel,
+    InvalidPayloadSize,
+    // (register, expected, found)
+    UnableToConfigureRegister(Register, u8, u8),
+}
+
 pub enum Error<GPIOE, SPIE> {
     InvalidPipeId,
     TooLargeAckPayload,

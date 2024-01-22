@@ -1,27 +1,31 @@
 //! The Bit Correction Level of the nRF24L01 module
 
 use super::RegisterValue;
+use crate::register::Register;
 
 use defmt::Format;
 
 /// The mandatory error detection mechanism in the packet
 #[derive(Debug, Clone, Copy, Format)]
-pub enum BitCorrection {
+pub enum CRC {
+    // No CRC 
+    CRCNone,
     // 1 byte CRC bit correction
     CRC1,
     // 2 byte CRC bit correction
     CRC2,
 }
 
-impl RegisterValue for BitCorrection {
-    fn register_value(&self, address: u8) -> u8 {
-        if address == 0 {
+impl RegisterValue for CRC {
+    fn register_value(&self, register: Register) -> Option<u8> {
+        if register == Register::Config {
             match self {
-                Self::CRC1 => 0b0000_1000,
-                Self::CRC2 => 0b0000_1100,
+                Self::CRCNone => Some(0),
+                Self::CRC1 => Some(2 << 1),
+                Self::CRC2 => Some(3 << 1),
             }
         } else {
-            return 0;
+            None
         }
     }
 }

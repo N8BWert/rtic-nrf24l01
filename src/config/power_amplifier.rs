@@ -1,6 +1,7 @@
 //! Power Amplifier level for the nRF24l01
 
 use super::RegisterValue;
+use crate::register::Register;
 
 use defmt::Format;
 
@@ -29,16 +30,16 @@ pub enum PowerAmplifier {
 }
 
 impl RegisterValue for PowerAmplifier {
-    fn register_value(&self, address: u8) -> u8 {
-        if address == 0x06 {
+    fn register_value(&self, register: Register) -> Option<u8> {
+        if register == Register::RfSetup {
             match self {
-                Self::PAMax => 0b0000_0110,
-                Self::PAHigh => 0b0000_0100,
-                Self::PAMedium => 0b0000_0010,
-                Self::PALow => 0b0000_0000,
+                Self::PAMax => Some(3 << 1),
+                Self::PAHigh => Some(2 << 1),
+                Self::PAMedium => Some(1 << 1),
+                Self::PALow => Some(0),
             }
         } else {
-            return 0u8;
+            None
         }
     }
 }

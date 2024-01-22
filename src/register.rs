@@ -2,6 +2,108 @@
 //! Register Mapping for Ease of Use of the nRF24L01.
 //! 
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Register {
+    Config = 0x00,
+    EnableAutoAcknowledge = 0x01,
+    EnabledRxAddresses = 0x02,
+    SetupAddressWidths = 0x03,
+    SetupAutoRetransmit = 0x04,
+    RfChannel = 0x05,
+    RfSetup = 0x06,
+    Status = 0x07,
+    ObserveTx = 0x08,
+    ReceivedPowerDetector = 0x09,
+    RxAddressP0 = 0x0A,
+    RxAddressP1 = 0x0B,
+    RxAddressP2 = 0x0C,
+    RxAddressP3 = 0x0D,
+    RxAddressP4 = 0x0E,
+    RxAddressP5 = 0x0F,
+    TxAddress = 0x10,
+    RxPayloadWidthP0 = 0x11,
+    RxPayloadWidthP1 = 0x12,
+    RxPayloadWidthP2 = 0x13,
+    RxPayloadWidthP3 = 0x14,
+    RxPayloadWidthP4 = 0x15,
+    RxPayloadWidthP5 = 0x16,
+    FifoStatus = 0x17,
+    DynamicPayload = 0x1C,
+    Feature = 0x1D,
+}
+
+impl Register {
+    pub fn get_width_registers() -> [Self; 6] {
+        [Self::RxPayloadWidthP0, Self::RxPayloadWidthP1,
+         Self::RxPayloadWidthP2, Self::RxPayloadWidthP3,
+         Self::RxPayloadWidthP4, Self::RxPayloadWidthP5]
+    }
+
+    pub fn get_writable_byte_registers() -> [Self; 18] {
+        [
+            Self::Config,
+            Self::EnableAutoAcknowledge,
+            Self::EnabledRxAddresses,
+            Self::SetupAddressWidths,
+            Self::SetupAutoRetransmit,
+            Self::RfChannel,
+            Self::RfSetup,
+            Self::Status,
+            Self::RxAddressP2,
+            Self::RxAddressP3,
+            Self::RxAddressP4,
+            Self::RxAddressP5,
+            Self::RxPayloadWidthP0,
+            Self::RxPayloadWidthP1,
+            Self::RxPayloadWidthP2,
+            Self::RxPayloadWidthP3,
+            Self::RxPayloadWidthP4,
+            Self::RxPayloadWidthP5,
+        ]
+    }
+
+    pub fn get_payload_length(pipe: u8) -> Self {
+        match pipe {
+            0 => Self::RxPayloadWidthP0,
+            1 => Self::RxPayloadWidthP1,
+            2 => Self::RxPayloadWidthP2,
+            3 => Self::RxPayloadWidthP3,
+            4 => Self::RxPayloadWidthP4,
+            5 => Self::RxPayloadWidthP5,
+            _ => Self::RxPayloadWidthP5
+        }
+    }
+
+    pub fn get_default(self) -> u8 {
+        match self {
+            Self::Config => 0b0000_1000,
+            Self::EnableAutoAcknowledge => 0b0011_1111,
+            Self::EnabledRxAddresses => 0b0000_0011,
+            Self::SetupAddressWidths => 0b0000_0011,
+            Self::SetupAutoRetransmit => 0b0000_0011,
+            Self::RfChannel => 0b0000_0010,
+            Self::RfSetup => 0b0000_1110,
+            Self::Status => 0b0000_1110,
+            Self::ObserveTx => 0,
+            Self::ReceivedPowerDetector => 0,
+            Self::RxAddressP2 => 0xC3,
+            Self::RxAddressP3 => 0xC4,
+            Self::RxAddressP4 => 0xC5,
+            Self::RxAddressP5 => 0xC6,
+            Self::RxPayloadWidthP0 => 0,
+            Self::RxPayloadWidthP1 => 0,
+            Self::RxPayloadWidthP2 => 0,
+            Self::RxPayloadWidthP3 => 0,
+            Self::RxPayloadWidthP4 => 0,
+            Self::RxPayloadWidthP5 => 0,
+            Self::FifoStatus => 0b0001_0001,
+            Self::DynamicPayload => 0,
+            Self::Feature => 0,
+            _ => 0,
+        }
+    }
+}
+
 pub trait ContainsStatus<Status> {
     fn contains_status(&self, status: Status) -> bool;
 }

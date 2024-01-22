@@ -1,6 +1,7 @@
 //! The data rate of the module
 
 use super::RegisterValue;
+use crate::register::Register;
 
 use defmt::Format;
 
@@ -21,15 +22,15 @@ pub enum DataRate {
 }
 
 impl RegisterValue for DataRate {
-    fn register_value(&self, address: u8) -> u8 {
-        if address == 0x06 {
+    fn register_value(&self, register: Register) -> Option<u8> {
+        if register == Register::RfSetup {
             match self {
-                Self::R250kb => 0b0010_0000,
-                Self::R1Mb => 0b0000_0000,
-                Self::R2Mb => 0b0000_1000,
+                Self::R250kb => Some(1 << 5),
+                Self::R1Mb => Some(0),
+                Self::R2Mb => Some(1 << 3),
             }
         } else {
-            return 0u8;
+            return None;
         }
     }
 }

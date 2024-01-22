@@ -1,5 +1,6 @@
 //! Configuration for data pipes on the nRF24L01 module
 
+use crate::register::Register;
 use super::RegisterValue;
 
 use defmt::Format;
@@ -9,7 +10,6 @@ use defmt::Format;
 pub struct DataPipeConfig<'a> {
     pub enabled: bool,
     pub auto_acknowledge: bool,
-    pub dynamic_payload: bool,
     pub address: &'a [u8],
 }
 
@@ -17,14 +17,20 @@ impl<'a> DataPipeConfig<'a> {
     pub const fn new(
         enabled: bool,
         auto_acknowledge: bool,
-        dynamic_payload: bool,
         address: &'a [u8],
     ) -> Self {
         Self {
             enabled,
             auto_acknowledge,
-            dynamic_payload,
             address,
+        }
+    }
+
+    pub const fn disabled() -> Self {
+        Self {
+            enabled: false,
+            auto_acknowledge: false,
+            address: b"Node1",
         }
     }
 }
@@ -34,49 +40,61 @@ impl<'a> Default for DataPipeConfig<'a> {
         Self {
             enabled: false,
             auto_acknowledge: false,
-            dynamic_payload: false,
-            address: b"000",
+            address: b"abc",
         }
     }
 }
 
-impl<'a> RegisterValue for [Option<DataPipeConfig<'a>>; 6] {
-    fn register_value(&self, register: u8) -> u8 {
+impl<'a> RegisterValue for [DataPipeConfig<'a>; 6] {
+    fn register_value(&self, register: Register) -> Option<u8> {
         match register {
-            0x01 => {
+            Register::EnableAutoAcknowledge => {
                 let mut value = 0u8;
-                for (i, config) in self.iter().enumerate() {
-                    if let Some(config) = config {
-                        if config.auto_acknowledge {
-                            value |= 2u8.pow(i as u32);
-                        }
+                for (i, pipe) in self.iter().enumerate() {
+                    if pipe.enabled && pipe.auto_acknowledge {
+                        value |= 1 << i;
                     }
                 }
-                return value;
+                Some(value)
             },
-            0x02 => {
+            Register::EnabledRxAddresses => {
                 let mut value = 0u8;
-                for (i, config) in self.iter().enumerate() {
-                    if let Some(config) = config {
-                        if config.enabled {
-                            value |= 2u8.pow(i as u32);
-                        }
+                for (i, pipe) in self.iter().enumerate() {
+                    if pipe.enabled {
+                        value |= 1 << i;
                     }
                 }
-                return value;
+                Some(value)
             },
-            0x1C => {
-                let mut value = 0u8;
-                for (i, config) in self.iter().enumerate() {
-                    if let Some(config) = config {
-                        if config.dynamic_payload {
-                            value |= 2u8.pow(i as u32);
-                        }
-                    }
+            Register::RxAddressP2 => {
+                if self[2].enabled {
+                    Some(self[2].address[0])
+                } else {
+                    None
                 }
-                return value;
-            }
-            _ => 0,
+            },
+            Register::RxAddressP3 => {
+                if self[3].enabled {
+                    Some(self[3].address[0])
+                } else {
+                    None
+                }
+            },
+            Register::RxAddressP4 => {
+                if self[4].enabled {
+                    Some(self[4].address[0])
+                } else {
+                    None
+                }
+            },
+            Register::RxAddressP5 => {
+                if self[5].enabled {
+                    Some(self[5].address[0])
+                } else {
+                    None
+                }
+            },
+            _ => None,
         }
     }
 }

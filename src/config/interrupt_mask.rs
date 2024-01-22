@@ -1,6 +1,7 @@
 //! The Interrupt Mask for the nRF24L01 radio
 
 use super::RegisterValue;
+use crate::register::Register;
 
 use defmt::Format;
 
@@ -60,25 +61,29 @@ impl InterruptMask {
 }
 
 impl RegisterValue for InterruptMask {
-    fn register_value(&self, address: u8) -> u8 {
-        if address == 0 {
+    fn register_value(&self, register: Register) -> Option<u8> {
+        if register == Register::Config {
             let mut value = 0u8;
-        
+
             if self.mask_rx {
-                value |= 0b0100_0000;
+                value |= 1 << 6;
             }
 
             if self.mask_tx {
-                value |= 0b0010_0000;
+                value |= 1 << 5;
             }
 
             if self.mask_retransmits {
-                value |= 0b0001_0000;
+                value |= 1 << 4;
             }
 
-            return value;
+            if value != 0u8 {
+                Some(value)
+            } else {
+                None
+            }
         } else {
-            return 0;
+            None
         }
     }
 }
