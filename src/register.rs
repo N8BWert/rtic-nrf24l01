@@ -74,6 +74,18 @@ impl Register {
         }
     }
 
+    pub fn get_rx_address(pipe: u8) -> Self {
+        match pipe {
+            0 => Self::RxAddressP0,
+            1 => Self::RxAddressP1,
+            2 => Self::RxAddressP2,
+            3 => Self::RxAddressP3,
+            4 => Self::RxAddressP4,
+            5 => Self::RxAddressP5,
+            _ => Self::RxAddressP0
+        }
+    }
+
     pub fn get_default(self) -> u8 {
         match self {
             Self::Config => 0b0000_1000,

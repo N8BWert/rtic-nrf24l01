@@ -213,6 +213,27 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
         self.payload_length = payload_size;
     }
 
+    pub fn set_pa_level(&mut self, pa_level: PowerAmplifier, spi: &mut SPI) {
+        let mut setup = self.read_byte_register(Register::RfSetup, spi);
+        setup &= !(0b0000_0110);
+        setup |= pa_level.register_value(Register::RfSetup).unwrap();
+        self.write_byte_register(setup, Register::RfSetup, spi);
+    }
+
+    pub fn open_writing_pipe(&mut self, address: &[u8], spi: &mut SPI) {
+        let _ = self.write_register(address, Register::RxAddressP0, spi);
+        let _ = self.write_register(address, Register::TxAddress, spi);
+    }
+
+    pub fn open_reading_pipe(&mut self, pipe: u8, address: &[u8], spi: &mut SPI) {
+        if pipe < 2 {
+            let _ = self.write_register(address, Register::get_rx_address(pipe), spi);
+            let mut enabled_addresses = self.read_byte_register(Register::EnabledRxAddresses, spi);
+            enabled_addresses |= 1 << pipe;
+            self.write_byte_register(enabled_addresses, Register::EnabledRxAddresses, spi);
+        }
+    }
+
     pub fn get_payload_size(&mut self, pipe: u8) -> u8 {
         self.payload_length
     }
@@ -266,12 +287,6 @@ impl<'a, GPIOE, SPIE, CSN, CE, SPI, DELAY> NRF24L01<'a, GPIOE, SPIE, CSN, CE, SP
         let mut config = self.get_config(spi);
         config &= !(1);
         self.write_byte_register(config, Register::Config, spi);
-    }
-
-    pub fn set_pa_level(&mut self, level: PowerAmplifier, spi: &mut SPI) {
-        let mut setup = self.read_byte_register(Register::RfSetup, spi) & 0xF8;
-        setup |= level.register_value(Register::RfSetup).unwrap();
-        self.write_byte_register(setup, Register::RfSetup, spi);
     }
 
     pub fn flush_rx(&mut self, spi: &mut SPI) -> u8 {

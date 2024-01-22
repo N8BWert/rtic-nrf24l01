@@ -4,6 +4,7 @@
 
 use crate::register::Register;
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum RadioError {
     InvalidBufferLength,
     InvalidRfChannel,
