@@ -1,3 +1,7 @@
+//!
+//! Driver for the nRF24L01+ Radio Module (based on the common RF24 C++ library)
+//! 
+
 #![no_std]
 
 use core::marker::PhantomData;
