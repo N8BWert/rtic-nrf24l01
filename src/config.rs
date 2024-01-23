@@ -86,6 +86,7 @@ impl RegisterValue for Configuration {
             Register::EnableAutoAcknowledge => self.receive_pipes.register_value(register),
             Register::EnableRx => self.receive_pipes.register_value(register),
             Register::SetupAddressWidth => self.address_width.register_value(register),
+            Register::SetupRetransmit => (self.retransmit_delay << 4) | self.retransmit_count,
             Register::RfChannel => self.rf_channel,
             Register::RfSetup => self.data_rate.register_value(register) | self.power_amplifier.register_value(register),
             Register::Status => 0xFF,
