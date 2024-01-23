@@ -335,6 +335,8 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
             delay.delay_ms(5);
         }
 
+        self.power_up(spi, delay);
+
         Ok(())
     }
 

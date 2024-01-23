@@ -10,11 +10,11 @@ use defmt::Format;
 #[derive(Debug, Clone, Copy, Format, PartialEq, Eq)]
 pub enum AddressWidth {
     // 3 byte address width
-    A3Bytes = 0x01,
+    A3Bytes = 0b01,
     // 4 byte address width
-    A4Bytes = 0x10,
+    A4Bytes = 0b10,
     // 5 byte address width
-    A5Bytes = 0x11,
+    A5Bytes = 0b11,
 }
 
 impl AddressWidth {
