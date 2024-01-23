@@ -2,20 +2,12 @@
 //! Error for the NRF24L01 Module
 //! 
 
-pub enum Error<GPIOE, SPIE> {
-    InvalidPipeId,
-    TooLargeAckPayload,
-    InvalidBufferSize,
-    InvalidRegisterBufferSize(u8),
-    InvalidAddressBufferSize,
-    UnknownRegister,
-    NoDataToReceive,
-    InvalidDataSize,
-    InvalidRfChannel,
-    InvalidRetransmitDelay,
-    InvalidRetransmitCount,
-    UnableToConfigureRegister(u8, u8, u8),
-    GpioError(GPIOE),
-    SpiError(SPIE),
-    GpioSpiError((GPIOE, SPIE)),
+use crate::register::Register;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RadioError {
+    InvalidAddressLength,
+    InvalidPayloadLength,
+    NoPacketReady,
+    UnableToWriteToRegister{register: Register, expected: u8, found: u8},
 }

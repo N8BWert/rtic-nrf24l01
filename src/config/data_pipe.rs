@@ -1,82 +1,117 @@
 //! Configuration for data pipes on the nRF24L01 module
 
+use crate::register::Register;
+
 use super::RegisterValue;
 
 use defmt::Format;
 
 /// The Configuration for a singular data pipe
 #[derive(Debug, Clone, Copy, Format)]
-pub struct DataPipeConfig<'a> {
+pub struct DataPipeConfig {
     pub enabled: bool,
     pub auto_acknowledge: bool,
-    pub dynamic_payload: bool,
-    pub address: &'a [u8],
+    pub address: u8,
+    pub payload_length: u8,
 }
 
-impl<'a> DataPipeConfig<'a> {
-    pub const fn new(
-        enabled: bool,
-        auto_acknowledge: bool,
-        dynamic_payload: bool,
-        address: &'a [u8],
-    ) -> Self {
-        Self {
-            enabled,
-            auto_acknowledge,
-            dynamic_payload,
-            address,
+impl DataPipeConfig {
+    pub fn default_for_pipe(pipe: u8) -> Self {
+        match pipe {
+            1 => Self {
+                enabled: true,
+                auto_acknowledge: true,
+                address: 0xC2,
+                payload_length: 32,
+            },
+            2 => Self {
+                enabled: false,
+                auto_acknowledge: true,
+                address: 0xC3,
+                payload_length: 32,
+            },
+            3 => Self {
+                enabled: false,
+                auto_acknowledge: true,
+                address: 0xC4,
+                payload_length: 32,
+            },
+            4 => Self {
+                enabled: false,
+                auto_acknowledge: true,
+                address: 0xC5,
+                payload_length: 32,
+            },
+            5 => Self {
+                enabled: false,
+                auto_acknowledge: true,
+                address: 0xC6,
+                payload_length: 32,
+            },
+            _ => Self::disabled(),
         }
     }
-}
 
-impl<'a> Default for DataPipeConfig<'a> {
-    fn default() -> Self {
+    pub fn disabled() -> Self {
         Self {
             enabled: false,
             auto_acknowledge: false,
-            dynamic_payload: false,
-            address: b"000",
+            address: 0,
+            payload_length: 32,
         }
     }
 }
 
-impl<'a> RegisterValue for [Option<DataPipeConfig<'a>>; 6] {
-    fn register_value(&self, register: u8) -> u8 {
+
+impl RegisterValue for [DataPipeConfig; 5] {
+    fn register_mask(&self, register: Register) -> u8 {
         match register {
-            0x01 => {
-                let mut value = 0u8;
-                for (i, config) in self.iter().enumerate() {
-                    if let Some(config) = config {
-                        if config.auto_acknowledge {
-                            value |= 2u8.pow(i as u32);
-                        }
-                    }
-                }
-                return value;
-            },
-            0x02 => {
-                let mut value = 0u8;
-                for (i, config) in self.iter().enumerate() {
-                    if let Some(config) = config {
-                        if config.enabled {
-                            value |= 2u8.pow(i as u32);
-                        }
-                    }
-                }
-                return value;
-            },
-            0x1C => {
-                let mut value = 0u8;
-                for (i, config) in self.iter().enumerate() {
-                    if let Some(config) = config {
-                        if config.dynamic_payload {
-                            value |= 2u8.pow(i as u32);
-                        }
-                    }
-                }
-                return value;
-            }
+            Register::EnableAutoAcknowledge => !(0b0011_1111),
+            Register::EnableRx => !(0b0011_1111),
+            Register::RxAddressP2 |
+            Register::RxAddressP3 |
+            Register::RxAddressP4 |
+            Register::RxAddressP5 => !(0xFF),
+            Register::RxPayloadWidthP1 |
+            Register::RxPayloadWidthP2 |
+            Register::RxPayloadWidthP3 |
+            Register::RxPayloadWidthP4 |
+            Register::RxPayloadWidthP5 => !(0xFF),
+            Register::DynamicPayload => !(0b0011_1111),
             _ => 0,
+        }
+    }
+
+    fn register_value(&self, register: Register) -> u8 {
+        match register {
+            Register::EnableAutoAcknowledge => {
+                let mut value = 0;
+                for i in 0..5 {
+                    if self[i].auto_acknowledge {
+                        value |= 1 << i;
+                    }
+                }
+                value
+            },
+            Register::EnableRx => {
+                let mut value = 0;
+                for i in 0..5 {
+                    if self[i].enabled {
+                        value |= 1 << i;
+                    }
+                }
+                value
+            },
+            Register::RxAddressP2 => self[1].address,
+            Register::RxAddressP3 => self[2].address,
+            Register::RxAddressP4 => self[3].address,
+            Register::RxAddressP5 => self[4].address,
+            Register::RxPayloadWidthP1 => self[0].payload_length,
+            Register::RxPayloadWidthP2 => self[1].payload_length,
+            Register::RxPayloadWidthP3 => self[2].payload_length,
+            Register::RxPayloadWidthP4 => self[3].payload_length,
+            Register::RxPayloadWidthP5 => self[4].payload_length,
+            _ => 0
         }
     }
 }

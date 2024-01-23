@@ -2,3 +2,6 @@
 
 # ignore lock file
 Cargo.lock
+
+# Vscode
+.vscode/**
