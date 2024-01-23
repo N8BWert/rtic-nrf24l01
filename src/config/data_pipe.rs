@@ -86,7 +86,7 @@ impl RegisterValue for [DataPipeConfig; 5] {
         match register {
             Register::EnableAutoAcknowledge => {
                 let mut value = 0;
-                for i in 0..5 {
+                for i in 0..=5 {
                     if self[i].auto_acknowledge {
                         value |= 1 << i;
                     }
@@ -95,7 +95,7 @@ impl RegisterValue for [DataPipeConfig; 5] {
             },
             Register::EnableRx => {
                 let mut value = 0;
-                for i in 0..5 {
+                for i in 0..=5 {
                     if self[i].enabled {
                         value |= 1 << i;
                     }
