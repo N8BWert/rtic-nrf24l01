@@ -53,29 +53,29 @@ pub struct Configuration {
 impl RegisterValue for Configuration {
     fn register_mask(&self, register: Register) -> u8 {
         match register {
-            Register::Config => !(0b0111_1100),
-            Register::EnableAutoAcknowledge => !(0b0011_1111),
-            Register::EnableRx => !(0b0011_1111),
-            Register::SetupAddressWidth => !(0b0000_0011),
-            Register::SetupRetransmit => !(0xFF),
-            Register::RfChannel => !(0b0111_1111),
-            Register::RfSetup => !(0b0010_1110),
-            Register::Status => !(0b0111_0000),
-            Register::ObserveTx => !(0x00),
-            Register::ReceivedPower => !(0x00),
+            Register::Config => 0b0111_1100,
+            Register::EnableAutoAcknowledge => 0b0011_1111,
+            Register::EnableRx => 0b0011_1111,
+            Register::SetupAddressWidth => 0b0000_0011,
+            Register::SetupRetransmit => 0xFF,
+            Register::RfChannel => 0b0111_1111,
+            Register::RfSetup => 0b0010_1110,
+            Register::Status => 0b0111_0000,
+            Register::ObserveTx => 0x00,
+            Register::ReceivedPower => 0x00,
             Register::RxAddressP2 |
             Register::RxAddressP3 |
             Register::RxAddressP4 |
-            Register::RxAddressP5 => !(0xFF),
+            Register::RxAddressP5 => 0xFF,
             Register::RxPayloadWidthP0 |
             Register::RxPayloadWidthP1 |
             Register::RxPayloadWidthP2 |
             Register::RxPayloadWidthP3 |
             Register::RxPayloadWidthP4 |
-            Register::RxPayloadWidthP5 => !(0b0011_1111),
-            Register::FifoStatus => !(0x00),
-            Register::DynamicPayload => !(0b0011_1111),
-            Register::Feature => !(0b0000_0111),
+            Register::RxPayloadWidthP5 => 0b0011_1111,
+            Register::FifoStatus => 0x00,
+            Register::DynamicPayload => 0b0011_1111,
+            Register::Feature => 0b0000_0111,
             _ => 0xFF,
         }
     }
