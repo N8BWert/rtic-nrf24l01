@@ -85,19 +85,19 @@ impl RegisterValue for [DataPipeConfig; 5] {
     fn register_value(&self, register: Register) -> u8 {
         match register {
             Register::EnableAutoAcknowledge => {
-                let mut value = 0;
-                for i in 0..=5 {
+                let mut value = 1;
+                for i in 0..5 {
                     if self[i].auto_acknowledge {
-                        value |= 1 << i;
+                        value |= 1 << (i+1);
                     }
                 }
                 value
             },
             Register::EnableRx => {
-                let mut value = 0;
-                for i in 0..=5 {
+                let mut value = 1;
+                for i in 0..5 {
                     if self[i].enabled {
-                        value |= 1 << i;
+                        value |= 1 << (i+1);
                     }
                 }
                 value
