@@ -88,8 +88,7 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
             }
         }
         let _ = self.ce.set_low();
-
-        self.clear_interrupts(spi);
+        
         if sent {
             Ok(true)
         } else {
