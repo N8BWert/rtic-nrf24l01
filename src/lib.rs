@@ -319,7 +319,7 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
                 },
                 _ => {
                     let mut address_value = self.read_byte_register(register, spi);
-                    address_value &= self.configuration.register_mask(register);
+                    address_value &= !(self.configuration.register_mask(register));
                     address_value |= self.configuration.register_value(register);
 
                     self.write_byte_register(register, address_value, spi);
