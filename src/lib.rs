@@ -404,6 +404,12 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
             false
         }
     }
+
+    pub fn pulse_ce(&mut self, delay: &mut DELAY) {
+        let _ = self.ce.set_high();
+        delay.delay_ms(1000);
+        let _ = self.ce.set_low();
+    }
     
     fn write_byte_register(&mut self, register: Register, data: u8, spi: &mut SPI) {
         let mut command = [Command::WriteRegister(register).opcode(), data];
