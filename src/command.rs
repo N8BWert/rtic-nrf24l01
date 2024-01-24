@@ -24,7 +24,7 @@ impl Command {
     pub fn opcode(&self) -> u8 {
         match self {
             Self::ReadRegister(register) => *register as u8,
-            Self::WriteRegister(register) => 0x20 | (*register as u8),
+            Self::WriteRegister(register) => 0b0010_0000 | (*register as u8),
             Self::ReadRxPayload => 0b0110_0001,
             Self::WriteTxPayload => 0b1010_0000,
             Self::FlushTx => 0b1110_0001,
