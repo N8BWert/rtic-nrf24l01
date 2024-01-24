@@ -89,7 +89,7 @@ impl RegisterValue for Configuration {
             Register::SetupRetransmit => (self.retransmit_delay << 4) | self.retransmit_count,
             Register::RfChannel => self.rf_channel,
             Register::RfSetup => self.data_rate.register_value(register) | self.power_amplifier.register_value(register),
-            Register::Status => 0xFF,
+            Register::Status => 0x00,
             Register::ObserveTx => 0x00,
             Register::ReceivedPower => 0x00,
             Register::RxAddressP2 |
