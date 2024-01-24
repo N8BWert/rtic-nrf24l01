@@ -283,6 +283,8 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
     pub fn begin(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), RadioError> {
         delay.delay_ms(POWER_ON_RESET_MS);
 
+        self.clear_interrupts(spi);
+
         for register in Register::write_registers() {
             match register {
                 Register::RxAddressP0 | Register::TxAddress => {
