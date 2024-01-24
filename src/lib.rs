@@ -88,7 +88,7 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
             }
         }
         let _ = self.ce.set_low();
-        
+
         if sent {
             Ok(true)
         } else {
@@ -431,7 +431,7 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
         command[1]
     }
 
-    fn read_register(&mut self, register: Register, buffer: &mut [u8], spi: &mut SPI) {
+    pub fn read_register(&mut self, register: Register, buffer: &mut [u8], spi: &mut SPI) {
         let buffer_length = buffer.len();
         let mut command = [0x00; 6];
         command[0] = Command::ReadRegister(register).opcode();
