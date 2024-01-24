@@ -425,7 +425,7 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
         self.safe_transfer_spi(&mut command[..=data.len()], spi);
     }
 
-    fn read_byte_register(&mut self, register: Register, spi: &mut SPI) -> u8 {
+    pub fn read_byte_register(&mut self, register: Register, spi: &mut SPI) -> u8 {
         let mut command = [Command::ReadRegister(register).opcode(), 0x00];
         self.safe_transfer_spi(&mut command, spi);
         command[1]
