@@ -84,13 +84,13 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
                 sent = true;
                 break;
             } else {
-                delay.delay_us((self.configuration.retransmit_delay as u32) * 250);
+                delay.delay_ms(1);
             }
         }
         let _ = self.ce.set_low();
 
+        self.clear_interrupts(spi);
         if sent {
-            self.clear_interrupts(spi);
             Ok(true)
         } else {
             Ok(false)
