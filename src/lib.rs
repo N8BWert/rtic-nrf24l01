@@ -75,8 +75,11 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
         let _ = self.ce.set_high();
         delay.delay_us(TX_SEND_TIME_US + CE_DELAY_US + TX_SETUP_US);
         let mut sent = false;
-        for _ in 0..=self.configuration.retransmit_count {
+        loop {
             let status = self.read_status(spi);
+            if status & (1 << 4) != 0 {
+                break;
+            }
             if status & (1 << 5) != 0 {
                 sent = true;
                 break;
