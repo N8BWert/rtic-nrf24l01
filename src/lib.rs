@@ -386,6 +386,24 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
     pub fn clear_interrupts(&mut self, spi: &mut SPI) {
         self.write_byte_register(Register::Status, 0xFF, spi);
     }
+
+    pub fn is_rx(&mut self, spi: &mut SPI) -> bool {
+        let config = self.read_config(spi);
+        if config & 0b11 == 0b11{
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_tx(&mut self, spi: &mut SPI) -> bool {
+        let config = self.read_config(spi);
+        if config & 0b11 == 0b10 {
+            true
+        } else {
+            false
+        }
+    }
     
     fn write_byte_register(&mut self, register: Register, data: u8, spi: &mut SPI) {
         let mut command = [Command::WriteRegister(register).opcode(), data];
