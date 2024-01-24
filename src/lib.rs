@@ -66,6 +66,8 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
             return Err(RadioError::InvalidPayloadLength);
         }
 
+        self.clear_interrupts(spi);
+
         let mut command = [0u8; 33];
         command[0] = Command::WriteTxPayload.opcode();
         command[1..=packet.len()].copy_from_slice(&packet[..]);
