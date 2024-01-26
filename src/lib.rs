@@ -424,18 +424,16 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
                 Register::RxAddressP0 |
                 Register::RxAddressP1 |
                 Register::TxAddress => {
-                    let register_value = self.read_byte_register(register, spi);
-                    register_map.add_register_value(register, register_value);
-                },
-                _ => {
                     let mut register_buffer = [0u8; 5];
                     self.read_register(register, &mut register_buffer, spi);
                     register_map.add_array_value(register, register_buffer);
                 },
+                _ => {
+                    let register_value = self.read_byte_register(register, spi);
+                    register_map.add_register_value(register, register_value);
+                },
             }
         }
-
-        register_map.add_register_value(Register::Config, 0x52);
 
         register_map
     }
