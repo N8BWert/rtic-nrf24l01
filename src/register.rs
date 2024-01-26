@@ -98,6 +98,37 @@ impl Register {
         ]
     }
 
+    pub fn all() -> [Register; 26] {
+        [
+            Self::Config,
+            Self::EnableAutoAcknowledge,
+            Self::EnableRx,
+            Self::SetupAddressWidth,
+            Self::SetupRetransmit,
+            Self::RfChannel,
+            Self::RfSetup,
+            Self::Status,
+            Self::ObserveTx,
+            Self::ReceivedPower,
+            Self::RxAddressP0,
+            Self::RxAddressP1,
+            Self::RxAddressP2,
+            Self::RxAddressP3,
+            Self::RxAddressP4,
+            Self::RxAddressP5,
+            Self::TxAddress,
+            Self::RxPayloadWidthP0,
+            Self::RxPayloadWidthP1,
+            Self::RxPayloadWidthP2,
+            Self::RxPayloadWidthP3,
+            Self::RxPayloadWidthP4,
+            Self::RxPayloadWidthP5,
+            Self::FifoStatus,
+            Self::DynamicPayload,
+            Self::Feature,
+        ]
+    }
+
     pub fn payload_length_register(pipe: u8) -> Register {
         match pipe {
             0 => Self::RxPayloadWidthP0,
@@ -120,5 +151,139 @@ impl Register {
             5 => Self::RxAddressP5,
             _ => Self::RxAddressP0,
         }
+    }
+}
+
+/// For debugging this is an implementation of the various registers with an accompanied value
+/// to use the debug formatter.
+pub struct RegisterMap {
+    config: u8,
+    en_aa: u8,
+    en_rxaddr: u8,
+    setup_aw: u8,
+    setup_retr: u8,
+    rf_ch: u8,
+    rf_setup: u8,
+    status: u8,
+    observe_tx: u8,
+    rpd: u8,
+    rx_addr_p0: [u8; 5],
+    rx_addr_p1: [u8; 5],
+    rx_addr_p2: u8,
+    rx_addr_p3: u8,
+    rx_addr_p4: u8,
+    rx_addr_p5: u8,
+    tx_addr: [u8; 5],
+    rx_pw_p0: u8,
+    rx_pw_p1: u8,
+    rx_pw_p2: u8,
+    rx_pw_p3: u8,
+    rx_pw_p4: u8,
+    rx_pw_p5: u8,
+    fifo_status: u8,
+    dynpd: u8,
+    feature: u8,
+}
+
+impl RegisterMap {
+    pub fn add_register_value(&mut self, register: Register, value: u8) {
+        match register {
+            Register::Config => self.config = value,
+            Register::EnableAutoAcknowledge => self.en_aa = value,
+            Register::EnableRx => self.en_rxaddr = value,
+            Register::SetupAddressWidth => self.setup_aw = value,
+            Register::SetupRetransmit => self.setup_retr = value,
+            Register::RfChannel => self.rf_ch = value,
+            Register::RfSetup => self.rf_setup = value,
+            Register::Status => self.status = value,
+            Register::ObserveTx => self.observe_tx = value,
+            Register::ReceivedPower => self.rpd = value,
+            Register::RxAddressP2 => self.rx_addr_p2 = value,
+            Register::RxAddressP3 => self.rx_addr_p3 = value,
+            Register::RxAddressP4 => self.rx_addr_p4 = value,
+            Register::RxAddressP5 => self.rx_addr_p5 = value,
+            Register::RxPayloadWidthP0 => self.rx_pw_p0 = value,
+            Register::RxPayloadWidthP1 => self.rx_pw_p1 = value,
+            Register::RxPayloadWidthP2 => self.rx_pw_p2 = value,
+            Register::RxPayloadWidthP3 => self.rx_pw_p3 = value,
+            Register::RxPayloadWidthP4 => self.rx_pw_p4 = value,
+            Register::RxPayloadWidthP5 => self.rx_pw_p5 = value,
+            Register::FifoStatus => self.fifo_status = value,
+            Register::DynamicPayload => self.dynpd = value,
+            Register::Feature => self.feature = value,
+            _ => (),
+        }
+    }
+
+    pub fn add_array_value(&mut self, register: Register, value: [u8; 5]) {
+        match register {
+            Register::RxAddressP0 => self.rx_addr_p0 = value,
+            Register::RxAddressP1 => self.rx_addr_p1 = value,
+            Register::TxAddress => self.tx_addr = value,
+            _ => (),
+        }
+    }
+}
+
+impl Default for RegisterMap {
+    fn default() -> Self {
+        Self {
+            config: 0,
+            en_aa: 0,
+            en_rxaddr: 0,
+            setup_aw: 0,
+            setup_retr: 0,
+            rf_ch: 0,
+            rf_setup: 0,
+            status: 0,
+            observe_tx: 0,
+            rpd: 0,
+            rx_addr_p0: [0u8; 5],
+            rx_addr_p1: [0u8; 5],
+            rx_addr_p2: 0,
+            rx_addr_p3: 0,
+            rx_addr_p4: 0,
+            rx_addr_p5: 0,
+            tx_addr: [0u8; 5],
+            rx_pw_p0: 0,
+            rx_pw_p1: 0,
+            rx_pw_p2: 0,
+            rx_pw_p3: 0,
+            rx_pw_p4: 0,
+            rx_pw_p5: 0,
+            fifo_status: 0,
+            dynpd: 0,
+            feature: 0
+        }
+    }
+}
+
+impl core::fmt::Debug for RegisterMap {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RegisterMap")
+            .field("CONFIG", &format_args!("0x{:#02X?}", self.config))
+            .field("EN_AA", &format_args!("0x{:#02X?}", self.en_aa))
+            .field("EN_RXADDR", &format_args!("0x{:#02X?}", self.en_rxaddr))
+            .field("SETUP_AW", &format_args!("0x{:#02X?}", self.setup_aw))
+            .field("SETUP_RETR", &format_args!("0x{:#02X?}", self.setup_retr))
+            .field("RF_CH", &format_args!("0x{:#02X?}", self.rf_ch))
+            .field("RF_SETUP", &format_args!("0x{:#02X?}", self.rf_setup))
+            .field("STATUS", &format_args!("0x{:#02X?}", self.status))
+            .field("OBSERVE_TX", &format_args!("0x{:#02X?}", self.observe_tx))
+            .field("RPD", &format_args!("0x{:#02X?}", self.rpd))
+            .field("RX_ADDR_P0", &format_args!("0x{:#02X?}{:#02X?}{:#02X?}{:#02X?}{:#02X?}",
+                                                            self.rx_addr_p0[0], self.rx_addr_p0[1], self.rx_addr_p0[2], self.rx_addr_p0[3], self.rx_addr_p0[4]))
+            .field("RX_ADDR_P1", &format_args!("0x{:#02X?}{:#02X?}{:#02X?}{:#02X?}{:#02X?}",
+                                                            self.rx_addr_p1[0], self.rx_addr_p1[1], self.rx_addr_p1[2], self.rx_addr_p1[3], self.rx_addr_p1[4]))
+            .field("RX_ADDR_P2-5", &format_args!("0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?}",
+                                                            self.rx_addr_p2, self.rx_addr_p3, self.rx_addr_p4, self.rx_addr_p5))
+            .field("TX_ADDR", &format_args!("0x{:#02X?}{:#02X?}{:#02X?}{:#02X?}{:#02X?}",
+                                                            self.tx_addr[0], self.tx_addr[1], self.tx_addr[2], self.tx_addr[3], self.tx_addr[4]))
+            .field("RX_PW_P0-P5", &format_args!("0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?}",
+                                                            self.rx_pw_p0, self.rx_pw_p1, self.rx_pw_p2, self.rx_pw_p3, self.rx_pw_p4, self.rx_pw_p5))
+            .field("FIFO_STATUS", &format_args!("0x{:#02X?}", self.fifo_status))
+            .field("DYNPD", &format_args!("0x{:#02X?}", self.dynpd))
+            .field("FEATURE", &format_args!("0x{:#02X?}", self.feature))
+            .finish()
     }
 }

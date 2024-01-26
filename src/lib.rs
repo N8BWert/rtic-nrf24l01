@@ -20,7 +20,7 @@ pub mod error;
 use error::RadioError;
 
 pub mod register;
-use register::Register;
+use register::{Register, RegisterMap};
 
 // Datasheet defined time periods
 const POWER_ON_RESET_MS: u32 = 100;
@@ -413,6 +413,29 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
         let _ = self.ce.set_high();
         delay.delay_ms(1000);
         let _ = self.ce.set_low();
+    }
+
+    // Debugging function that returns a debug printable mapping of the device's internal registers
+    pub fn get_registers(&mut self, spi: &mut SPI) -> RegisterMap {
+        let mut register_map = RegisterMap::default();
+
+        for register in Register::all() {
+            match register {
+                Register::RxAddressP0 |
+                Register::RxAddressP1 |
+                Register::TxAddress => {
+                    let register_value = self.read_byte_register(register, spi);
+                    register_map.add_register_value(register, register_value);
+                },
+                _ => {
+                    let mut register_buffer = [0u8; 5];
+                    self.read_register(register, &mut register_buffer, spi);
+                    register_map.add_array_value(register, register_buffer);
+                },
+            }
+        }
+
+        register_map
     }
     
     fn write_byte_register(&mut self, register: Register, data: u8, spi: &mut SPI) {
