@@ -435,6 +435,8 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
             }
         }
 
+        register_map.add_register_value(Register::Config, 0x52);
+
         register_map
     }
     
