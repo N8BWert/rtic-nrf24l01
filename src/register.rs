@@ -261,29 +261,29 @@ impl Default for RegisterMap {
 impl core::fmt::Debug for RegisterMap {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("RegisterMap")
-            .field("CONFIG", &format_args!("0x{:#02X?}", self.config))
-            .field("EN_AA", &format_args!("0x{:#02X?}", self.en_aa))
-            .field("EN_RXADDR", &format_args!("0x{:#02X?}", self.en_rxaddr))
-            .field("SETUP_AW", &format_args!("0x{:#02X?}", self.setup_aw))
-            .field("SETUP_RETR", &format_args!("0x{:#02X?}", self.setup_retr))
-            .field("RF_CH", &format_args!("0x{:#02X?}", self.rf_ch))
-            .field("RF_SETUP", &format_args!("0x{:#02X?}", self.rf_setup))
-            .field("STATUS", &format_args!("0x{:#02X?}", self.status))
-            .field("OBSERVE_TX", &format_args!("0x{:#02X?}", self.observe_tx))
-            .field("RPD", &format_args!("0x{:#02X?}", self.rpd))
-            .field("RX_ADDR_P0", &format_args!("0x{:#02X?}{:#02X?}{:#02X?}{:#02X?}{:#02X?}",
+            .field("CONFIG", &format_args!("{:#02X}\n", self.config))
+            .field("EN_AA", &format_args!("{:#02X}\n", self.en_aa))
+            .field("EN_RXADDR", &format_args!("{:#02X}\n", self.en_rxaddr))
+            .field("SETUP_AW", &format_args!("{:#02X}\n", self.setup_aw))
+            .field("SETUP_RETR", &format_args!("{:#02X}\n", self.setup_retr))
+            .field("RF_CH", &format_args!("{:#02X}\n", self.rf_ch))
+            .field("RF_SETUP", &format_args!("{:#02X}\n", self.rf_setup))
+            .field("STATUS", &format_args!("{:#02X}\n", self.status))
+            .field("OBSERVE_TX", &format_args!("{:#02X}\n", self.observe_tx))
+            .field("RPD", &format_args!("{:#02X}\n", self.rpd))
+            .field("RX_ADDR_P0", &format_args!("{:#02X}{:02X}{:02X}{:02X}{:02X}\n",
                                                             self.rx_addr_p0[0], self.rx_addr_p0[1], self.rx_addr_p0[2], self.rx_addr_p0[3], self.rx_addr_p0[4]))
-            .field("RX_ADDR_P1", &format_args!("0x{:#02X?}{:#02X?}{:#02X?}{:#02X?}{:#02X?}",
+            .field("RX_ADDR_P1", &format_args!("{:#02X}{:02X}{:02X}{:02X}{:02X}\n",
                                                             self.rx_addr_p1[0], self.rx_addr_p1[1], self.rx_addr_p1[2], self.rx_addr_p1[3], self.rx_addr_p1[4]))
-            .field("RX_ADDR_P2-5", &format_args!("0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?}",
+            .field("RX_ADDR_P2-5", &format_args!("{:#02X} {:#02X} {:#02X} {:#02X}\n",
                                                             self.rx_addr_p2, self.rx_addr_p3, self.rx_addr_p4, self.rx_addr_p5))
-            .field("TX_ADDR", &format_args!("0x{:#02X?}{:#02X?}{:#02X?}{:#02X?}{:#02X?}",
+            .field("TX_ADDR", &format_args!("{:#02X}{:02X}{:02X}{:02X}{:02X}\n",
                                                             self.tx_addr[0], self.tx_addr[1], self.tx_addr[2], self.tx_addr[3], self.tx_addr[4]))
-            .field("RX_PW_P0-P5", &format_args!("0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?} 0x{:#02X?}",
+            .field("RX_PW_P0-P5", &format_args!("{:#02X} {:#02X} {:#02X} {:#02X} {:#02X} {:#02X}\n",
                                                             self.rx_pw_p0, self.rx_pw_p1, self.rx_pw_p2, self.rx_pw_p3, self.rx_pw_p4, self.rx_pw_p5))
-            .field("FIFO_STATUS", &format_args!("0x{:#02X?}", self.fifo_status))
-            .field("DYNPD", &format_args!("0x{:#02X?}", self.dynpd))
-            .field("FEATURE", &format_args!("0x{:#02X?}", self.feature))
+            .field("FIFO_STATUS", &format_args!("{:#02X}\n", self.fifo_status))
+            .field("DYNPD", &format_args!("{:#02X}\n", self.dynpd))
+            .field("FEATURE", &format_args!("{:#02X}\n", self.feature))
             .finish()
     }
 }
