@@ -60,7 +60,7 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
         }
     }
 
-    /// Send a packet
+    /// Send a packet multicast false
     pub fn send_packet(&mut self, packet: &[u8], spi: &mut SPI, delay: &mut DELAY) -> Result<bool, RadioError> {
         if packet.len() != self.configuration.tx_length as usize {
             return Err(RadioError::InvalidPayloadLength);
@@ -75,25 +75,17 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
 
         // Try to send the packet and wait for the packet to be received
         let _ = self.ce.set_high();
-        delay.delay_us(TX_SEND_TIME_US + CE_DELAY_US + TX_SETUP_US);
-        let mut sent = false;
-        loop {
-            let status = self.read_status(spi);
-            if status & (1 << 4) != 0 {
-                break;
-            }
-            if status & (1 << 5) != 0 {
-                sent = true;
-                break;
-            } else {
-                delay.delay_ms(1);
-            }
-        }
+        delay.delay_us(10);
         let _ = self.ce.set_low();
 
-        if sent {
+        while self.read_status(spi) & (1 << 5) == 0 && self.read_status(spi) & (1 << 4) == 0 {
+            delay.delay_ms(100);
+        }
+
+        if self.read_status(spi) & (1 << 5) != 0 {
             Ok(true)
         } else {
+            self.flush_tx(spi);
             Ok(false)
         }
     }
