@@ -25,9 +25,9 @@ pub enum PowerAmplifier {
     // -6dBm
     PAHigh = 2,
     // -12dBm
-    PAMedium = 1,
+    PALow = 1,
     // Minimum Power Amplifier Level (-18dBm)
-    PALow = 0,
+    PAMin = 0,
 }
 
 impl RegisterValue for PowerAmplifier {

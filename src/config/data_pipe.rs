@@ -12,7 +12,6 @@ pub struct DataPipeConfig {
     pub enabled: bool,
     pub auto_acknowledge: bool,
     pub address: u8,
-    pub payload_length: u8,
 }
 
 impl DataPipeConfig {
@@ -22,31 +21,26 @@ impl DataPipeConfig {
                 enabled: true,
                 auto_acknowledge: true,
                 address: 0xC2,
-                payload_length: 32,
             },
             2 => Self {
                 enabled: false,
                 auto_acknowledge: true,
                 address: 0xC3,
-                payload_length: 32,
             },
             3 => Self {
                 enabled: false,
                 auto_acknowledge: true,
                 address: 0xC4,
-                payload_length: 32,
             },
             4 => Self {
                 enabled: false,
                 auto_acknowledge: true,
                 address: 0xC5,
-                payload_length: 32,
             },
             5 => Self {
                 enabled: false,
                 auto_acknowledge: true,
                 address: 0xC6,
-                payload_length: 32,
             },
             _ => Self::disabled(),
         }
@@ -57,7 +51,6 @@ impl DataPipeConfig {
             enabled: false,
             auto_acknowledge: false,
             address: 0,
-            payload_length: 32,
         }
     }
 }
@@ -72,11 +65,6 @@ impl RegisterValue for [DataPipeConfig; 5] {
             Register::RxAddressP3 |
             Register::RxAddressP4 |
             Register::RxAddressP5 => !(0xFF),
-            Register::RxPayloadWidthP1 |
-            Register::RxPayloadWidthP2 |
-            Register::RxPayloadWidthP3 |
-            Register::RxPayloadWidthP4 |
-            Register::RxPayloadWidthP5 => !(0xFF),
             Register::DynamicPayload => !(0b0011_1111),
             _ => 0,
         }
@@ -106,11 +94,6 @@ impl RegisterValue for [DataPipeConfig; 5] {
             Register::RxAddressP3 => self[2].address,
             Register::RxAddressP4 => self[3].address,
             Register::RxAddressP5 => self[4].address,
-            Register::RxPayloadWidthP1 => self[0].payload_length,
-            Register::RxPayloadWidthP2 => self[1].payload_length,
-            Register::RxPayloadWidthP3 => self[2].payload_length,
-            Register::RxPayloadWidthP4 => self[3].payload_length,
-            Register::RxPayloadWidthP5 => self[4].payload_length,
             _ => 0
         }
     }

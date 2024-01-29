@@ -42,7 +42,7 @@ pub struct Configuration {
     pub data_rate: DataRate,
     pub power_amplifier: PowerAmplifier,
     pub tx_address: [u8; 5],
-    pub tx_length: u8,
+    pub payload_length: u8,
     pub network_mask: [u8; 4],
     pub receive_pipes: [DataPipeConfig; 5],
     pub dynamic_payload_enabled: bool,
@@ -96,17 +96,18 @@ impl RegisterValue for Configuration {
             Register::RxAddressP3 |
             Register::RxAddressP4 |
             Register::RxAddressP5 => self.receive_pipes.register_value(register),
-            Register::RxPayloadWidthP0 => self.tx_length,
+            Register::RxPayloadWidthP0 |
             Register::RxPayloadWidthP1 |
             Register::RxPayloadWidthP2 |
             Register::RxPayloadWidthP3 |
             Register::RxPayloadWidthP4 |
-            Register::RxPayloadWidthP5 => self.receive_pipes.register_value(register),
+            Register::RxPayloadWidthP5 => self.payload_length,
             Register::FifoStatus => 0x00,
             Register::DynamicPayload => if self.dynamic_payload_enabled { 0xFF } else { 0x00 },
             Register::Feature => {
                 let mut value = 0;
 
+        
                 if self.dynamic_payload_enabled {
                     value |= 1 << 2;
                 }

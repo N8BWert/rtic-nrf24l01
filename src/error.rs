@@ -4,10 +4,14 @@
 
 use crate::register::Register;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+use defmt::Format;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Format)]
 pub enum RadioError {
     InvalidAddressLength,
     InvalidPayloadLength,
     NoPacketReady,
+    SendTimeout,
+    BadConfiguration,
     UnableToWriteToRegister{register: Register, expected: u8, found: u8},
 }

@@ -2,7 +2,9 @@
 //! The Registers of the nRF24L01+
 //! 
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+use defmt::{Format, Formatter, write};
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Format)]
 pub enum Register {
     Config = 0x00,
     EnableAutoAcknowledge = 0x01,
@@ -285,5 +287,41 @@ impl core::fmt::Debug for RegisterMap {
             .field("\nDYNPD", &format_args!("{:#02X}", self.dynpd))
             .field("\nFEATURE", &format_args!("{:#02X}", self.feature))
             .finish()
+    }
+}
+
+impl Format for RegisterMap {
+    fn format(&self, fmt: Formatter) {
+        write!(
+            fmt,
+            "
+CONFIG       =  {:#02X}
+EN_AA        =  {:#02X}
+EN_RX_ADDR   =  {:#02X}
+SETUP_AW     =  {:#02X}
+SETUP_RETR   =  {:#02X}
+RF_CH        =  {:#02X}
+RF_SETUP     =  {:#02X}
+STATUS       =  {:#02X}
+OBSERVE_TX   =  {:#02X}
+RPD          =  {:#02X}
+RX_ADDR_P0   =  {:#02X}{:02X}{:02X}{:02X}{:02X}
+RX_ADDR_P1   =  {:#02X}{:02x}{:02X}{:02X}{:02X}
+RX_ADDR_P2-5 =  {:#02X} {:#02X} {:#02X} {:#02X}
+TX_ADDR      =  {:#02X}{:02X}{:02X}{:02X}{:02X}
+RX_PW_P0-P5  =  {:#02X} {:#02X} {:#02X} {:#02X} {:#02X} {:#02X}
+FIFO_STATUS  =  {:#02X}
+DYNPD        =  {:#02X}
+FEATURE      =  {:#02X}
+            ",
+            self.config, self.en_aa, self.en_rxaddr, self.setup_aw, self.setup_retr, self.rf_ch,
+            self.rf_setup, self.status, self.observe_tx, self.rpd, self.rx_addr_p0[0],
+            self.rx_addr_p0[1], self.rx_addr_p0[2], self.rx_addr_p0[3], self.rx_addr_p0[4],
+            self.rx_addr_p1[0], self.rx_addr_p1[1], self.rx_addr_p1[2], self.rx_addr_p1[3],
+            self.rx_addr_p1[4], self.rx_addr_p2, self.rx_addr_p3, self.rx_addr_p4, self.rx_addr_p5,
+            self.tx_addr[0], self.tx_addr[1], self.tx_addr[2], self.tx_addr[3], self.tx_addr[4],
+            self.rx_pw_p0, self.rx_pw_p1, self.rx_pw_p2, self.rx_pw_p3, self.rx_pw_p4, self.rx_pw_p5,
+            self.fifo_status, self.dynpd, self.feature
+        );
     }
 }
