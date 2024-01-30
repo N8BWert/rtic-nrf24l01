@@ -337,7 +337,7 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
     pub fn available(&mut self, spi: &mut SPI, delay: &mut DELAY) -> bool {
         let fifo_status = self.read_byte_register(Register::FifoStatus, spi, delay);
 
-        return !(fifo_status & 1 == 0);
+        return fifo_status & 1 == 0;
     }
 
     pub fn available_pipe(&mut self, spi: &mut SPI, delay: &mut DELAY) -> u8 {
