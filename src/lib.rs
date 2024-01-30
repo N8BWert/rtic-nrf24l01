@@ -334,16 +334,15 @@ impl<CE, CSN, SPI, DELAY, GPIOE, SPIE> Radio<CE, CSN, SPI, DELAY, GPIOE, SPIE>
         self.status = buffer[0];
     }
 
-    pub fn available(&mut self, pipe: u8, spi: &mut SPI, delay: &mut DELAY) -> bool {
+    pub fn available(&mut self, spi: &mut SPI, delay: &mut DELAY) -> bool {
         let fifo_status = self.read_byte_register(Register::FifoStatus, spi, delay);
 
-        if fifo_status & 1 == 0 {
-            return false;
-        }
+        return !(fifo_status & 1 == 0);
+    }
 
-        let pipe_num = (self.status >> 1) & 0x07;
-
-        return pipe_num == pipe;
+    pub fn available_pipe(&mut self, spi: &mut SPI, delay: &mut DELAY) -> u8 {
+        let pipe = (self.read_status(spi, delay) >> 1) & 0x07;
+        pipe
     }
 
     /// Reset the radio to it's default state (theoretically, this should be called every time the radio is
